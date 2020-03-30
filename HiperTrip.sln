@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29920.165
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HiperTrip", "HiperTrip\HiperTrip.csproj", "{643EAC94-AD7B-46B7-BD0D-B53472E761E1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Entities", "Entities\Entities.csproj", "{46AC7E94-5189-445F-8AFC-4EC2D60EA194}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{643EAC94-AD7B-46B7-BD0D-B53472E761E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{643EAC94-AD7B-46B7-BD0D-B53472E761E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{643EAC94-AD7B-46B7-BD0D-B53472E761E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{643EAC94-AD7B-46B7-BD0D-B53472E761E1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46AC7E94-5189-445F-8AFC-4EC2D60EA194}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46AC7E94-5189-445F-8AFC-4EC2D60EA194}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46AC7E94-5189-445F-8AFC-4EC2D60EA194}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46AC7E94-5189-445F-8AFC-4EC2D60EA194}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2302B297-6A99-40B5-9CD8-5E73D1E18C42}
+	EndGlobalSection
+EndGlobal

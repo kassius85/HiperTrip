@@ -41,7 +41,17 @@ namespace HiperTrip
             services.ConfigureCustomActionFilters();
 
             // Añadir CORS.
-            services.AddCors();
+            services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAllOriginsPolicy", // I introduced a string constant just as a label "AllowAllOriginsPolicy"
+                builder =>
+                {
+                    builder.AllowAnyMethod();
+                    builder.AllowAnyHeader();
+                    builder.AllowAnyOrigin();
+                    //builder.AllowCredentials();
+                });
+            });
 
             // Añadir controladores
             services.AddControllers();
@@ -104,10 +114,11 @@ namespace HiperTrip
             app.ConfigureCustomExceptionMiddleware();
 
             // global cors policy
-            app.UseCors(x => x.AllowAnyMethod()
-                              .AllowAnyHeader()
-                              .WithOrigins("")
-                              .AllowCredentials());
+            app.UseCors("AllowAllOriginsPolicy");
+            //app.UseCors(x => x.AllowAnyMethod()
+            //                  .AllowAnyHeader()
+            //                  .WithOrigins("")
+            //                  .AllowCredentials());
 
             app.UseRouting();
             app.UseHttpsRedirection();

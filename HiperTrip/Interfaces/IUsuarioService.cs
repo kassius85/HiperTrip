@@ -15,6 +15,13 @@ namespace HiperTrip.Interfaces
         Task<Dictionary<string, object>> CrearUsuario(UsuarioDto usuarioNuevo);
 
         /// <summary>
+        /// Activar cuenta de usuario.
+        /// </summary>
+        /// <param name="activarCuenta"></param>
+        /// <returns></returns>
+        Task<Dictionary<string, object>> ActivarCuenta(ActivarCuentaDto activarCuenta);
+
+        /// <summary>
         /// Devuelve una lista de usuarios.
         /// </summary>
         /// <returns></returns>

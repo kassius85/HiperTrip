@@ -50,6 +50,11 @@ namespace HiperTrip.Models
                     .HasMaxLength(255)
                     .HasDefaultValueSql("(0x00)");
 
+                entity.Property(e => e.CodActivHash)
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasDefaultValueSql("(0x00)");
+
                 entity.Property(e => e.ContrasSalt)
                     .IsRequired()
                     .HasMaxLength(255)

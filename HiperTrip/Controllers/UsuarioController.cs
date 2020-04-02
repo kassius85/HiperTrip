@@ -24,14 +24,14 @@ namespace HiperTrip.Controllers
             _usuarioService = usuarioService;
         }
 
-        // GET: api/Usuarios
+        // GET: api/Usuario
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Usuario>>> GetUsuario()
         {
             return await _context.Usuario.ToListAsync();
         }
 
-        // GET: api/Usuarios/5
+        // GET: api/Usuario/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Usuario>> GetUsuario(string id)
         {
@@ -45,7 +45,7 @@ namespace HiperTrip.Controllers
             return usuario;
         }
 
-        // PUT: api/Usuarios/5
+        // PUT: api/Usuario/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [HttpPut("{id}")]
@@ -77,7 +77,7 @@ namespace HiperTrip.Controllers
             return NoContent();
         }
 
-        // POST: api/Usuarios
+        // POST: api/Usuario
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [AllowAnonymous]
@@ -87,7 +87,18 @@ namespace HiperTrip.Controllers
             return new ObjectResult(await _usuarioService.CrearUsuario(usuario).ConfigureAwait(true));
         }
 
-        // DELETE: api/Usuarios/5
+        // POST: api/Usuario/Activate -- Activar cuenta de usuario
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
+        // more details see https://aka.ms/RazorPagesCRUD.
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("Activate")]
+        public async Task<IActionResult> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        {
+            return new ObjectResult(await _usuarioService.ActivarCuenta(activarCuenta).ConfigureAwait(true));
+        }
+
+        // DELETE: api/Usuario/5
         [HttpDelete("{id}")]
         public async Task<ActionResult<Usuario>> DeleteUsuario(string id)
         {

@@ -10,6 +10,7 @@
         public string CodExterno { get; set; }
         public string TipoUsuExt { get; set; }
         public byte[] ContrasHash { get; set; }
+        public byte[] CodActivHash { get; set; }
         public byte[] ContrasSalt { get; set; }
         public string UsuarActivo { get; set; }
         public string UsuConectado { get; set; }

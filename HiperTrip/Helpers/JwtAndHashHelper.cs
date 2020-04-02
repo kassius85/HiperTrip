@@ -42,13 +42,26 @@ namespace HiperTrip.Helpers
             }
         }
 
-        /// <summary>
-        /// Verificar contraseña válida.
-        /// </summary>
-        /// <param name="password"></param>
-        /// <param name="storedHash"></param>
-        /// <param name="storedSalt"></param>
-        /// <returns></returns>
+        public static byte[] HashCode(string codigo, byte[] contrsalt)
+        {
+            byte[] hashedCode = default;
+
+            using (HMACSHA512 hmac = new HMACSHA512())
+            {
+                hmac.Key = contrsalt;
+                hashedCode = hmac.ComputeHash(Encoding.UTF8.GetBytes(codigo)); // Aplicar Hash.
+            }
+
+            return hashedCode;
+        }
+
+         /// <summary>
+            /// Verificar contraseña válida.
+            /// </summary>
+            /// <param name="password"></param>
+            /// <param name="storedHash"></param>
+            /// <param name="storedSalt"></param>
+            /// <returns></returns>
         public static bool VerificarContrasenadHash(byte[] contrsalt, byte[] contrhash, string contrasena)
         {
             using (HMACSHA512 hmac = new HMACSHA512(contrsalt))

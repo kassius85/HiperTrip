@@ -12,7 +12,10 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace HiperTrip.Services
@@ -80,6 +83,11 @@ namespace HiperTrip.Services
 
                         usuario.CodUsuario = newcod;
 
+                        // Generar código de activación con hash.
+                        string randomCode = RandomGeneratorHelper.RandomString(6);
+
+                        usuario.CodActivHash = JwtAndHashHelper.HashCode(randomCode, contrsalt);
+
                         // Salvar datos de usuario.
                         await _context.Usuario.AddAsync(usuario);
 
@@ -109,9 +117,7 @@ namespace HiperTrip.Services
 
                             emailMessage.Subject = "Account Activation - HiperTrip";
 
-                            string randomCode = RandomGeneratorHelper.RandomString(6);
-
-                            emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head> <title>Account Activation - HiperTrip - {0}</title></head><body> <table style=""height: 100 %; width: 500px; font - family: sans - serif; ""> <tbody> <tr> <td> <div style=""background - color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""> <h1>Verification Notice!</h1> <h2>ACTION REQUIRED</h2> </div> <div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: justify; border-bottom: 1px #bbb solid;""> <span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div> <div style=""padding: 25px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Hi {1}:</p> <p style=""color: #ff6600; font-weight: bold;"">You're one step away from becoming a HiperTrip member.</p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Below is your account login information:</p> <p style=""color: #2e6c80;"">Username: <span style=""color: #ff6600; font-weight: bold;"">{1}</span></p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80; font-weight: bold;"">Here It's The Code To Activate Your Account:</p> <p> {2} </p> </div> <div style=""color: #2e6c80;""> <p>(Please copy and paste the above URL to your browser if the link doesn't work.)</p> </div> <div style=""color: #2e6c80; padding: 10px 0px 0px 0px;""> <p>If you have questions or concerns, please contact us at:</p> <p><a href=""https://www.w3schools.com"">http://www.hipertrip.com/contact/</a></p> </div> <div style=""color: #2e6c80; padding: 10px 0px 25px 0px;""> <p>-HiperTrip Team</p> </div> <div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div> </td> </tr> </tbody> </table></body></html>", usuarioNuevo.NombreUsuar, usuarioNuevo.NombreCompl, randomCode);
+                            emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head> <title>Account Activation - HiperTrip - {0}</title></head><body> <table style=""height: 100 %; width: 500px; font - family: sans - serif; ""> <tbody> <tr> <td> <div style=""background - color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""> <h1>Verification Notice!</h1> <h2>ACTION REQUIRED</h2> </div> <div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: justify; border-bottom: 1px #bbb solid;""> <span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div> <div style=""padding: 25px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Hi {1}:</p> <p style=""color: #ff6600; font-weight: bold;"">You're one step away from becoming a HiperTrip member.</p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Below is your account login information:</p> <p style=""color: #2e6c80;"">Username: <span style=""color: #ff6600; font-weight: bold;"">{1}</span></p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80; font-weight: bold;"">Here It's The Code To Activate Your Account:</p> <p> {2} </p> </div> <div style=""color: #2e6c80;""> <p>(Please copy and paste the above URL to your browser if the link doesn't work.)</p> </div> <div style=""color: #2e6c80; padding: 10px 0px 0px 0px;""> <p>If you have questions or concerns, please contact us at:</p> <p><a href=""https://www.w3schools.com"">http://www.hipertrip.com/contact/</a></p> </div> <div style=""color: #2e6c80; padding: 10px 0px 25px 0px;""> <p>-HiperTrip Team</p> </div> <div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div> </td> </tr> </tbody> </table></body></html>", usuario.NombreUsuar, usuario.NombreCompl, randomCode);
 
                             // Enviar correo para activar cuenta.
                             _emailService.SendEmailActivateAccount(emailMessage);
@@ -150,6 +156,55 @@ namespace HiperTrip.Services
                 usuarioNuevo = _mapper.Map<UsuarioDto>(usuario);
                 _resultService.AddValue("usuario", usuarioNuevo);
             }
+
+            return _resultService.GetProperties();
+        }
+
+        public async Task<Dictionary<string, object>> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        {
+            httpStatusCode = HttpStatusCode.OK;
+            resultado = true;
+            mensaje = string.Empty;
+
+            if (!activarCuenta.IsNull())
+            {
+                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == activarCuenta.CodUsuario).ConfigureAwait(true);
+
+                // Verificar que la contraseña es válida.
+                if (JwtAndHashHelper.VerificarContrasenadHash(usuario.ContrasSalt, usuario.CodActivHash, activarCuenta.CodActivacion))
+                {
+                    usuario.CodActivHash = Encoding.UTF8.GetBytes(string.Empty);
+                    usuario.UsuarActivo = "S";
+
+                    _context.Entry(usuario).State = EntityState.Modified;
+                    try
+                    {
+                        if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        {
+                            mensaje = "Cuenta activada satisfactoriamente!";
+                        }
+                        else
+                        {
+                            httpStatusCode = HttpStatusCode.BadRequest;
+                            resultado = false;
+                            mensaje = "Inconsistencia al activar cuenta.";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+
+                    }
+                }
+            }
+            else
+            {
+                httpStatusCode = HttpStatusCode.BadRequest;
+                resultado = false;
+                mensaje = "Favor suministrar datos de activación de la cuenta.";
+            }
+
+            _resultService.AddValue("StatusCode", httpStatusCode);
+            _resultService.AddValue(resultado, mensaje);
 
             return _resultService.GetProperties();
         }

@@ -2,6 +2,7 @@
 {
     public class UsuarioDto
     {
+        public string CodUsuario { get; set; }
         public string NombreUsuar { get; set; }
         public string NombreCompl { get; set; }
         public string CorreoUsuar { get; set; }

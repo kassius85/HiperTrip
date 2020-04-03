@@ -68,7 +68,7 @@ namespace HiperTrip.Services
             {
                 if (await ValidaNuevo(usuarioNuevo).ConfigureAwait(true))
                 {
-                    if (JwtAndHashHelper.CrearContrasenaHash(usuarioNuevo.Contrasena, out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                    if (usuarioNuevo.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
                     {
                         // Mapear datos de DTO al modelo.
                         usuario = _mapper.Map<Usuario>(usuarioNuevo);
@@ -84,9 +84,10 @@ namespace HiperTrip.Services
                         usuario.CodUsuario = newcod;
 
                         // Generar código de activación con hash.
-                        string randomCode = RandomGeneratorHelper.RandomString(6);
+                        int tamano = 6;
+                        string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = JwtAndHashHelper.HashCode(randomCode, contrsalt);
+                        usuario.CodActivHash = randomCode.HashCode(contrsalt);
 
                         // Salvar datos de usuario.
                         await _context.Usuario.AddAsync(usuario);
@@ -162,44 +163,47 @@ namespace HiperTrip.Services
 
         public async Task<Dictionary<string, object>> ActivarCuenta(ActivarCuentaDto activarCuenta)
         {
-            httpStatusCode = HttpStatusCode.OK;
-            resultado = true;
+            httpStatusCode = HttpStatusCode.BadRequest;
+            resultado = false;
             mensaje = string.Empty;
 
             if (!activarCuenta.IsNull())
             {
                 Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == activarCuenta.CodUsuario).ConfigureAwait(true);
 
-                // Verificar que la contraseña es válida.
-                if (JwtAndHashHelper.VerificarContrasenadHash(usuario.ContrasSalt, usuario.CodActivHash, activarCuenta.CodActivacion))
+                if (usuario.UsuarActivo == "N")
                 {
-                    usuario.CodActivHash = Encoding.UTF8.GetBytes(string.Empty);
-                    usuario.UsuarActivo = "S";
-
-                    _context.Entry(usuario).State = EntityState.Modified;
-                    try
+                    // Verificar el códifo de activación.
+                    if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CodActivHash))
                     {
+                        usuario.CodActivHash = Encoding.UTF8.GetBytes(string.Empty);
+                        usuario.UsuarActivo = "S";
+
+                        _context.Entry(usuario).State = EntityState.Modified;
+
                         if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
                         {
+                            httpStatusCode = HttpStatusCode.OK;
+                            resultado = true;
                             mensaje = "Cuenta activada satisfactoriamente!";
                         }
                         else
                         {
-                            httpStatusCode = HttpStatusCode.BadRequest;
-                            resultado = false;
                             mensaje = "Inconsistencia al activar cuenta.";
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-
+                        mensaje = "El codigo no es válido.";
                     }
+                }
+                else
+                {
+                    mensaje = "La cuenta fue activada con anterioridad.";
                 }
             }
             else
             {
-                httpStatusCode = HttpStatusCode.BadRequest;
-                resultado = false;
                 mensaje = "Favor suministrar datos de activación de la cuenta.";
             }
 
@@ -251,14 +255,14 @@ namespace HiperTrip.Services
             if (resultado && usuario != null)
             {
                 string contrasena = usuarioDto.Contrasena ?? string.Empty;
-
+                
                 // Verificar que la contraseña es válida.
-                if (JwtAndHashHelper.VerificarContrasenadHash(usuario.ContrasSalt, usuario.ContrasHash, contrasena))
+                if (contrasena.VerifyHashCode(usuario.ContrasSalt, usuario.ContrasHash))
                 {
                     // Mapear datos de modelo al DTO.
                     usuarioDto = _mapper.Map<UsuarioDto>(usuario);
 
-                    token = JwtAndHashHelper.BuildToken(usuarioDto, _appSettings.JwtSecretKey, _appSettings.JwtExpireMinutes);
+                    token = usuarioDto.CodUsuario.BuildToken(usuarioDto.CorreoUsuar, _appSettings.JwtSecretKey, _appSettings.JwtExpireMinutes);
                 }
                 else
                 {

@@ -24,6 +24,36 @@ namespace HiperTrip.Controllers
             _usuarioService = usuarioService;
         }
 
+        // POST: api/Usuario
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
+        // more details see https://aka.ms/RazorPagesCRUD.
+        [AllowAnonymous]
+        [HttpPost]
+        public async Task<IActionResult> PostUsuario(UsuarioDto usuario)
+        {
+            return new ObjectResult(await _usuarioService.CrearUsuario(usuario).ConfigureAwait(true));
+        }
+
+        // POST: api/Usuario/Activate -- Activar cuenta de usuario
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
+        // more details see https://aka.ms/RazorPagesCRUD.
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("Activate")]
+        public async Task<IActionResult> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        {
+            return new ObjectResult(await _usuarioService.ActivarCuenta(activarCuenta).ConfigureAwait(true));
+        }
+
+        // POST: api/Usuario/Login -- Autenticarse
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("Login")]
+        public async Task<IActionResult> Autenticarse([FromBody] UsuarioDto usuario)
+        {
+            return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
+        }
+
         // GET: api/Usuario
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Usuario>>> GetUsuario()
@@ -75,27 +105,6 @@ namespace HiperTrip.Controllers
             }
 
             return NoContent();
-        }
-
-        // POST: api/Usuario
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
-        // more details see https://aka.ms/RazorPagesCRUD.
-        [AllowAnonymous]
-        [HttpPost]
-        public async Task<ActionResult<UsuarioDto>> PostUsuario(UsuarioDto usuario)
-        {
-            return new ObjectResult(await _usuarioService.CrearUsuario(usuario).ConfigureAwait(true));
-        }
-
-        // POST: api/Usuario/Activate -- Activar cuenta de usuario
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
-        // more details see https://aka.ms/RazorPagesCRUD.
-        [AllowAnonymous]
-        [HttpPost]
-        [Route("Activate")]
-        public async Task<IActionResult> ActivarCuenta(ActivarCuentaDto activarCuenta)
-        {
-            return new ObjectResult(await _usuarioService.ActivarCuenta(activarCuenta).ConfigureAwait(true));
         }
 
         // DELETE: api/Usuario/5

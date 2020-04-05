@@ -49,7 +49,16 @@ namespace HiperTrip.Controllers
         [AllowAnonymous]
         [HttpPost]
         [Route("Login")]
-        public async Task<IActionResult> Autenticarse([FromBody] UsuarioDto usuario)
+        public async Task<IActionResult> Autenticarse(UsuarioDto usuario)
+        {
+            return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
+        }
+
+        // POST: api/Usuario/Recover -- Autenticarse
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("Recover")]
+        public async Task<IActionResult> RecuperarCuenta(UsuarioDto usuario)
         {
             return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
         }

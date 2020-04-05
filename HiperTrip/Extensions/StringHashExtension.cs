@@ -32,7 +32,7 @@ namespace HiperTrip.Extensions
             }
         }
 
-        public static byte[] HashCode(this string stringCode, byte[] paswdsalt)
+        public static byte[] BuildHashCode(this string stringCode, byte[] paswdsalt)
         {
             byte[] hashedCode = default;
 

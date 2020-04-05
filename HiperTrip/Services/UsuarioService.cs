@@ -51,7 +51,7 @@ namespace HiperTrip.Services
             _emailService = emailService;
             _resultService = resultService;
 
-            if (emailConfiguration != null)
+            if (!emailConfiguration.IsNull())
             {
                 _emailConfiguration = emailConfiguration.Value;
             }
@@ -87,7 +87,7 @@ namespace HiperTrip.Services
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = randomCode.HashCode(contrsalt);
+                        usuario.CodActivHash = randomCode.BuildHashCode(contrsalt);
 
                         // Salvar datos de usuario.
                         await _context.Usuario.AddAsync(usuario);
@@ -146,7 +146,7 @@ namespace HiperTrip.Services
 
                 if (!usuario.IsNull())
                 {
-                    if (usuario.UsuarActivo == "N")
+                    if (!usuario.UsuarActivo.IsStringTrue())
                     {
                         // Verificar el códifo de activación.
                         if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CodActivHash))
@@ -233,7 +233,7 @@ namespace HiperTrip.Services
             }
 
             // Verificar si se trajeron datos del usuario.
-            if (resultado && usuario != null)
+            if (resultado && !usuario.IsNull())
             {
                 string contrasena = usuarioDto.Contrasena ?? string.Empty;
                 
@@ -245,13 +245,13 @@ namespace HiperTrip.Services
 
                     token = usuarioDto.CodUsuario.BuildToken(usuarioDto.CorreoUsuar, _appSettings.JwtSecretKey, _appSettings.JwtExpireMinutes);
                 
-                    if (usuarioDto.UsuarActivo == "N")
+                    if (!usuarioDto.UsuarActivo.IsStringTrue())
                     {
                         // Generar código de activación con hash.
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = randomCode.HashCode(usuario.ContrasSalt);
+                        usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
 
                         // Actualizar datos de usuario.
                         _context.Entry(usuario).State = EntityState.Modified;
@@ -295,6 +295,54 @@ namespace HiperTrip.Services
                 _resultService.AddValue("usuario", usuarioDto);
                 _resultService.AddValue("token", token);
             }
+
+            return _resultService.GetProperties();
+        }
+
+        public async Task<Dictionary<string, object>> RecuperarCuenta(UsuarioDto usuarioDto)
+        {
+            httpStatusCode = HttpStatusCode.BadRequest;
+            resultado = false;
+            mensaje = string.Empty;
+
+            if (!usuarioDto.IsNull())
+            {
+                if (_emailService.ValidEmail(usuarioDto.CorreoUsuar))
+                {
+                    Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+
+                    if (!usuario.IsNull())
+                    {
+                        if (usuario.UsuarActivo.IsStringTrue())
+                        {
+                            // Lógica para enviar correo de recuperar contraseña.
+                            //
+                        }
+                        else
+                        {
+                            // Lógica para enviar correo de activar cuenta.
+                            //
+
+                            mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo.";
+                        }
+                    }
+                    else
+                    {
+                        mensaje = "La dirección de correo no está registrada.";
+                    }
+                }
+                else
+                {
+                    mensaje = "La dirección de correo no es válida.";
+                }
+            }
+            else
+            {
+                mensaje = "Debe suministrar los datos para la recuperación de la cuenta.";
+            }
+
+            _resultService.AddValue("StatusCode", httpStatusCode);
+            _resultService.AddValue(resultado, mensaje);
 
             return _resultService.GetProperties();
         }
@@ -362,7 +410,7 @@ namespace HiperTrip.Services
                 {
                     httpStatusCode = HttpStatusCode.BadRequest;
                     resultado = false;
-                    mensaje = "El correo no es válido.";
+                    mensaje = "La dirección de correo no es válida.";
                 }
             }
             else
@@ -387,7 +435,7 @@ namespace HiperTrip.Services
             List<EmailAddress> fromAddresses = new List<EmailAddress>();
             EmailAddress emailFROM = new EmailAddress()
             {
-                Name = "HiperTrip Team",
+                Name = _emailConfiguration.NameToReply,
                 Address = _emailConfiguration.SmtpUsername
             };
             fromAddresses.Add(emailFROM);

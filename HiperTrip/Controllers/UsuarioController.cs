@@ -60,7 +60,7 @@ namespace HiperTrip.Controllers
         [Route("Recover")]
         public async Task<IActionResult> RecuperarCuenta(UsuarioDto usuario)
         {
-            return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
+            return new ObjectResult(await _usuarioService.RecuperarCuenta(usuario).ConfigureAwait(true));
         }
 
         // GET: api/Usuario

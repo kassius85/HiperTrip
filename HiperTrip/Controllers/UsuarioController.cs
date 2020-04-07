@@ -40,7 +40,7 @@ namespace HiperTrip.Controllers
         [AllowAnonymous]
         [HttpPost]
         [Route("Activate")]
-        public async Task<IActionResult> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        public async Task<IActionResult> ActivarCuenta(ActivaCuentaDto activarCuenta)
         {
             return new ObjectResult(await _usuarioService.ActivarCuenta(activarCuenta).ConfigureAwait(true));
         }
@@ -54,13 +54,22 @@ namespace HiperTrip.Controllers
             return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
         }
 
-        // POST: api/Usuario/Recover -- Autenticarse
+        // POST: api/Usuario/Recover -- RecuperarCuenta
         [AllowAnonymous]
         [HttpPost]
         [Route("Recover")]
         public async Task<IActionResult> RecuperarCuenta(UsuarioDto usuario)
         {
             return new ObjectResult(await _usuarioService.RecuperarCuenta(usuario).ConfigureAwait(true));
+        }
+
+        // POST: api/Usuario/ChangePassword -- CambiarContrasena
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("ChangePassword")]
+        public async Task<IActionResult> CambiarContrasena(RecuperaContrasenaDto recuperaContrasena)
+        {
+            return new ObjectResult(await _usuarioService.CambiarContrasena(recuperaContrasena).ConfigureAwait(true));
         }
 
         // GET: api/Usuario

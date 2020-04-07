@@ -10,6 +10,6 @@ namespace HiperTrip.Interfaces
         Task<List<EmailMessage>> ReceiveEmail(int maxCount = 10);
         bool ValidEmail(string email);
         void SendEmailActivateAccount(EmailAddress emailTo, string username, string subject = "", string content = "");
-        void SendEmailActivateAccount(EmailMessage emailMessage);
+        void SendEmail(EmailMessage emailMessage);
     }
 }

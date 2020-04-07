@@ -3,7 +3,6 @@ using Entities.DTOs;
 using Entities.Helpers;
 using Entities.Models;
 using HiperTrip.Extensions;
-using HiperTrip.Helpers;
 using HiperTrip.Interfaces;
 using HiperTrip.Models;
 using HiperTrip.Settings;
@@ -12,9 +11,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -94,6 +91,7 @@ namespace HiperTrip.Services
 
                         if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
                         {
+                            // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 1);
 
                             mensaje = "Usuario creado con éxito.";
@@ -134,7 +132,7 @@ namespace HiperTrip.Services
             return _resultService.GetProperties();
         }
 
-        public async Task<Dictionary<string, object>> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        public async Task<Dictionary<string, object>> ActivarCuenta(ActivaCuentaDto activarCuenta)
         {
             httpStatusCode = HttpStatusCode.BadRequest;
             resultado = false;
@@ -169,6 +167,9 @@ namespace HiperTrip.Services
                         }
                         else
                         {
+                            // Lógica para validar intentos de recuperación de contraseña.
+                            //
+
                             mensaje = "El código no es válido.";
                         }
                     }
@@ -330,19 +331,31 @@ namespace HiperTrip.Services
 
                                 httpStatusCode = HttpStatusCode.OK;
                                 resultado = true;
+                                mensaje = "Código de recuparación enviado. Favor revise su correo.";
                             }
                             else
                             {
-                                httpStatusCode = HttpStatusCode.BadRequest;
-                                resultado = false;
                                 mensaje = "Inconsistencia al salvar datos de usuario.";
-                            };
+                            }
                         }
-                        else
+                        else // Lógica para enviar correo de activar cuenta.
                         {
-                            // Lógica para enviar correo de activar cuenta.
-                            //
+                            // Generar código de activación con hash.
+                            int tamano = 6;
+                            string randomCode = tamano.RandomString();
 
+                            usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+
+                            // Salvar datos de usuario.
+                            await _context.Usuario.AddAsync(usuario);
+
+                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            {
+                                // Enviar correo para activar cuenta.
+                                EnviarCorreo(usuario, randomCode, 1);
+                            }
+
+                            httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                             mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo.";
                         }
                     }
@@ -367,6 +380,79 @@ namespace HiperTrip.Services
             return _resultService.GetProperties();
         }
 
+        public async Task<Dictionary<string, object>> CambiarContrasena(RecuperaContrasenaDto recuperaContrasena)
+        {
+            httpStatusCode = HttpStatusCode.BadRequest;
+            resultado = false;
+            mensaje = string.Empty;
+
+            if (!recuperaContrasena.IsNull())
+            {
+                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == recuperaContrasena.ActivaCuenta.CodUsuario).ConfigureAwait(true);
+
+                if (!usuario.IsNull())
+                {
+                    if (usuario.UsuarActivo.IsStringTrue())
+                    {
+                        if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                        {
+                            // Inicializar la contraseña con Hash y el Salt.
+                            usuario.ContrasHash = contrhash;
+                            usuario.ContrasSalt = contrsalt;
+
+                            // Actualizar datos de usuario.
+                            _context.Entry(usuario).State = EntityState.Modified;
+
+                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            {
+                                httpStatusCode = HttpStatusCode.OK;
+                                resultado = true;
+                                mensaje = "Contraseña actualizada con éxito!";
+                            }
+                            else
+                            {
+                                mensaje = "Inconsistencia al salvar datos de usuario.";
+                            };
+
+                        }
+                    }
+                    else // Lógica para enviar correo de activar cuenta.
+                    {
+                        // Generar código de activación con hash.
+                        int tamano = 6;
+                        string randomCode = tamano.RandomString();
+
+                        usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+
+                        // Salvar datos de usuario.
+                        await _context.Usuario.AddAsync(usuario);
+
+                        if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        {
+                            // Enviar correo para activar cuenta.
+                            EnviarCorreo(usuario, randomCode, 1);
+                        }
+
+                        httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
+                        mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo.";
+                    }
+                }
+                else
+                {
+                    mensaje = "El usuario no existe.";
+                }
+            }
+            else
+            {
+                mensaje = "Debe suministrar los datos para cambiar la contraseña.";
+            }
+
+            _resultService.AddValue("StatusCode", httpStatusCode);
+            _resultService.AddValue(resultado, mensaje);
+
+            return _resultService.GetProperties();
+        }
+
         public async Task<Dictionary<string, object>> GetUsuarios()
         {
             IList<Usuario> resultado = await _context.Usuario.ToListAsync().ConfigureAwait(true);
@@ -378,28 +464,44 @@ namespace HiperTrip.Services
             return _resultService.GetProperties();
         }
 
-        public Dictionary<string, object> GetUsuarioPorId(Usuario usuario)
+        public async Task<Dictionary<string, object>> GetUsuarioPorId(string id)
         {
-            if (usuario.IsNull())
-            {
-                httpStatusCode = HttpStatusCode.NotFound;
-                resultado = false;
-                mensaje = "El usuario no existe.";
+            httpStatusCode = HttpStatusCode.BadRequest;
+            resultado = false;
+            mensaje = string.Empty;
 
-                _resultService.AddValue("StatusCode", httpStatusCode);
-                _resultService.AddValue(resultado, mensaje);
+            if (!string.IsNullOrEmpty(id))
+            {
+                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == id).ConfigureAwait(true);
+
+                if (!usuario.IsNull())
+                {
+                    UsuarioDto usuarioDto = _mapper.Map<UsuarioDto>(usuario);
+
+                    httpStatusCode = HttpStatusCode.OK;
+                    resultado = true;
+                    _resultService.AddValue("usuario", usuarioDto);
+                }
+                else
+                {
+                    httpStatusCode = HttpStatusCode.NotFound;
+                    mensaje = "El usuario no existe.";
+                }
             }
             else
             {
-                _resultService.AddValue("usuario", usuario);
+                mensaje = "Favor sumistrar una identificación válida.";
             }
+
+            _resultService.AddValue("StatusCode", httpStatusCode);
+            _resultService.AddValue(resultado, mensaje);
 
             return _resultService.GetProperties();
         }
 
-        public async Task<bool> ExisteNombreUsuario(string nombreUsu)
+        public async Task<bool> ExisteUsuario(string id)
         {
-            return await _context.Usuario.AnyAsync(e => e.NombreUsuar == nombreUsu).ConfigureAwait(true);
+            return await _context.Usuario.AnyAsync(e => e.CodUsuario == id).ConfigureAwait(true);
         }
 
         //-----------------------------------------------------------------------------------------------------------------------------------
@@ -441,6 +543,11 @@ namespace HiperTrip.Services
             }
 
             return false;
+        }
+
+        private async Task<bool> ExisteNombreUsuario(string NombreUsu)
+        {
+            return await _context.Usuario.AnyAsync(e => e.NombreUsuar == NombreUsu).ConfigureAwait(true);
         }
 
         private async Task<bool> ExisteCorreoUsuario(string correoUsu)
@@ -503,7 +610,7 @@ namespace HiperTrip.Services
             }
 
             // Enviar correo para activar cuenta.
-            _emailService.SendEmailActivateAccount(emailMessage);
+            _emailService.SendEmail(emailMessage);
         }
     }
 }

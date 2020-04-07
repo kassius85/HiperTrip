@@ -40,7 +40,7 @@ namespace HiperTrip.Controllers
         [AllowAnonymous]
         [HttpPost]
         [Route("Activate")]
-        public async Task<IActionResult> ActivarCuenta(ActivarCuentaDto activarCuenta)
+        public async Task<IActionResult> ActivarCuenta(ActivaCuentaDto activarCuenta)
         {
             return new ObjectResult(await _usuarioService.ActivarCuenta(activarCuenta).ConfigureAwait(true));
         }
@@ -63,6 +63,15 @@ namespace HiperTrip.Controllers
             return new ObjectResult(await _usuarioService.RecuperarCuenta(usuario).ConfigureAwait(true));
         }
 
+        // POST: api/Usuario/ChangePassword -- Cambiar contraseña
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("ChangePassword")]
+        public async Task<IActionResult> CambiarContrasena(UsuarioDto usuario)
+        {
+            return new ObjectResult(await _usuarioService.RecuperarCuenta(usuario).ConfigureAwait(true));
+        }
+
         // GET: api/Usuario
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Usuario>>> GetUsuario()
@@ -70,18 +79,11 @@ namespace HiperTrip.Controllers
             return await _context.Usuario.ToListAsync();
         }
 
-        // GET: api/Usuario/5
+        // GET: api/Usuario/01
         [HttpGet("{id}")]
-        public async Task<ActionResult<Usuario>> GetUsuario(string id)
+        public async Task<IActionResult> GetUsuario(string id)
         {
-            var usuario = await _context.Usuario.FindAsync(id);
-
-            if (usuario == null)
-            {
-                return NotFound();
-            }
-
-            return usuario;
+            return new ObjectResult(await _usuarioService.GetUsuarioPorId(id).ConfigureAwait(true));
         }
 
         // PUT: api/Usuario/5

@@ -124,7 +124,7 @@ namespace HiperTrip.Services
             this.Send(emailMessage);
         }
 
-        public void SendEmailActivateAccount(EmailMessage emailMessage)
+        public void SendEmail(EmailMessage emailMessage)
         {
             if (emailMessage != null)
             {

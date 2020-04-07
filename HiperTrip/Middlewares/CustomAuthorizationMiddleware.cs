@@ -21,36 +21,41 @@ namespace HiperTrip.Middlewares
         {
             _resultService = resultService;
 
-            if (httpContext != null)
+            if (!httpContext.IsNull())
             {
-                string codUsuario = httpContext.GetUserName();
-                if (!string.IsNullOrEmpty(codUsuario))
+                if (!await ValidaUsuarioAsync(httpContext).ConfigureAwait(true))
                 {
-                    if (!await ValidaUsuarioAsync(httpContext, codUsuario).ConfigureAwait(true))
-                    {
-                        return;
-                    }
+                    return;
                 }
 
-                string jti = httpContext.GetTokenClaim("jti");
-                if (!string.IsNullOrEmpty(jti))
+                if (!await ValidaTokenJti(httpContext).ConfigureAwait(true))
                 {
-                    if (!await ValidaTokenJti(httpContext, jti).ConfigureAwait(true))
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
 
             await _next(httpContext).ConfigureAwait(true);
         }
 
-        private async Task<bool> ValidaUsuarioAsync(HttpContext context, string codUsuario)
+        private async Task<bool> ValidaUsuarioAsync(HttpContext context)
         {
+            string codUsuario = context.GetUniqueName();
+
+            if (string.IsNullOrEmpty(codUsuario))
+            {
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                _resultService.AddValue(false, "La identificación contenida en el token no es válida.");
+
+                await context.Response.WriteAsync(_resultService.GetJsonProperties()).ConfigureAwait(true);
+
+                return false;
+            }
+
             IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
 
             // Determinar si existe el usuario.
-            if (!await userService.ExisteNombreUsuario(codUsuario).ConfigureAwait(true))
+            if (!await userService.ExisteUsuario(codUsuario).ConfigureAwait(true))
             {
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
@@ -66,8 +71,17 @@ namespace HiperTrip.Middlewares
             return true;
         }
 
-        private async Task<bool> ValidaTokenJti(HttpContext context, string jti)
+        private async Task<bool> ValidaTokenJti(HttpContext context)
         {
+            string jti = context.GetTokenClaim("jti");
+            
+            if (string.IsNullOrEmpty(jti))
+            {
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                _resultService.AddValue(false, "El identificador del token no es válido.");
+            }
+
             IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
 
             await Task.Run(() => 5).ConfigureAwait(true);

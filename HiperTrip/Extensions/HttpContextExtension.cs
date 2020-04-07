@@ -22,7 +22,7 @@ namespace HiperTrip.Extensions
             return roles;
         }
 
-        public static string GetUserName(this HttpContext context)
+        public static string GetUniqueName(this HttpContext context)
         {
             if (!context.IsNull())
             {

@@ -54,7 +54,7 @@ namespace HiperTrip.Controllers
             return new ObjectResult(await _usuarioService.Autenticarse(usuario).ConfigureAwait(true));
         }
 
-        // POST: api/Usuario/Recover -- Autenticarse
+        // POST: api/Usuario/Recover -- Recuperar cuenta
         [AllowAnonymous]
         [HttpPost]
         [Route("Recover")]

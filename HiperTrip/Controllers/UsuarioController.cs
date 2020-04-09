@@ -79,7 +79,7 @@ namespace HiperTrip.Controllers
             return await _context.Usuario.ToListAsync();
         }
 
-        // GET: api/Usuario/01
+        // GET: api/Usuario/1
         [HttpGet("{id}")]
         public async Task<IActionResult> GetUsuario(string id)
         {

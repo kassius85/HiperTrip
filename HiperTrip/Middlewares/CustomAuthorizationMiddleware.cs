@@ -11,15 +11,17 @@ namespace HiperTrip.Middlewares
     {
         private readonly RequestDelegate _next;
         private IResultService _resultService;
+        private IUsuarioService _userService;
 
         public CustomAuthorizationMiddleware(RequestDelegate next)
         {
             _next = next;
         }
 
-        public async Task InvokeAsync(HttpContext httpContext, IResultService resultService)
+        public async Task InvokeAsync(HttpContext httpContext, IResultService resultService, IUsuarioService userService)
         {
             _resultService = resultService;
+            _userService = userService;
 
             if (!httpContext.IsNull())
             {
@@ -41,21 +43,10 @@ namespace HiperTrip.Middlewares
         {
             string codUsuario = context.GetUniqueName();
 
-            if (string.IsNullOrEmpty(codUsuario))
-            {
-                context.Response.ContentType = "application/json";
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                _resultService.AddValue(false, "La identificación contenida en el token no es válida.");
-
-                await context.Response.WriteAsync(_resultService.GetJsonProperties()).ConfigureAwait(true);
-
-                return false;
-            }
-
-            IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
+            //IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
 
             // Determinar si existe el usuario.
-            if (!await userService.ExisteUsuario(codUsuario).ConfigureAwait(true))
+            if (!string.IsNullOrEmpty(codUsuario) && !await _userService.ExisteUsuario(codUsuario).ConfigureAwait(true))
             {
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
@@ -75,30 +66,26 @@ namespace HiperTrip.Middlewares
         {
             string jti = context.GetTokenClaim("jti");
             
-            if (string.IsNullOrEmpty(jti))
+            if (!string.IsNullOrEmpty(jti))
             {
-                context.Response.ContentType = "application/json";
-                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                _resultService.AddValue(false, "El identificador del token no es válido.");
+                //IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
+
+                await Task.Run(() => 5).ConfigureAwait(true);
+
+                // Determinar si existe el jti es correcto.
+                //if (!await _userService.ExisteNombreUsuario(codUsuario))
+                //{
+                //    context.Response.ContentType = "application/json";
+                //    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                //    _resultService.AddValue(false, "El usuario con el que intenta acceder no existe en el sistema.");
+
+                //    await context.Response.WriteAsync(_resultService.GetJsonProperties());
+
+                //    return false;
+                //}
+
+                // Realizar demás validaciones de usuario activo, usuario borrado y cantidad de conexiones.
             }
-
-            IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();
-
-            await Task.Run(() => 5).ConfigureAwait(true);
-
-            // Determinar si existe el jti es correcto.
-            //if (!await userService.ExisteNombreUsuario(codUsuario))
-            //{
-            //    context.Response.ContentType = "application/json";
-            //    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            //    _resultService.AddValue(false, "El usuario con el que intenta acceder no existe en el sistema.");
-
-            //    await context.Response.WriteAsync(_resultService.GetJsonProperties());
-
-            //    return false;
-            //}
-
-            // Realizar demás validaciones de usuario activo, usuario borrado y cantidad de conexiones.
 
             return true;
         }

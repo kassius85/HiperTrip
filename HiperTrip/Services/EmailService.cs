@@ -4,7 +4,6 @@ using HiperTrip.Settings;
 using MailKit.Net.Pop3;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.Extensions.Options;
 using MimeKit;
 using MimeKit.Text;
 using System.Collections.Generic;
@@ -17,17 +16,7 @@ namespace HiperTrip.Services
 {
     public class EmailService : IEmailService
     {
-        private readonly EmailSettings _emailConfiguration;
-
-        public EmailService(IOptions<EmailSettings> emailConfiguration)
-        {
-            if (emailConfiguration != null)
-            {
-                _emailConfiguration = emailConfiguration.Value;
-            }
-        }
-
-        public void Send(EmailMessage emailMessage)
+        public void Send(EmailMessage emailMessage, EmailSettings emailSettings)
         {
             if (emailMessage != null)
             {
@@ -47,12 +36,12 @@ namespace HiperTrip.Services
                 using (SmtpClient emailClient = new SmtpClient())
                 {
                     //The last parameter here is to use SSL (Which you should!)
-                    emailClient.Connect(_emailConfiguration.SmtpServer, _emailConfiguration.SmtpPort, SecureSocketOptions.SslOnConnect);
+                    emailClient.Connect(emailSettings.SmtpServer, emailSettings.SmtpPort, SecureSocketOptions.SslOnConnect);
 
                     //Remove any OAuth functionality as we won't be using it. 
                     emailClient.AuthenticationMechanisms.Remove("XOAUTH2");
 
-                    emailClient.Authenticate(_emailConfiguration.SmtpUsername, _emailConfiguration.SmtpPassword);
+                    emailClient.Authenticate(emailSettings.SmtpUsername, emailSettings.SmtpPassword);
 
                     emailClient.Send(message);
 
@@ -61,15 +50,15 @@ namespace HiperTrip.Services
             }
         }
 
-        public async Task<List<EmailMessage>> ReceiveEmail(int maxCount = 10)
+        public async Task<List<EmailMessage>> ReceiveEmail(EmailSettings emailSettings, int maxCount = 10)
         {
             using (Pop3Client emailClient = new Pop3Client())
             {
-                await emailClient.ConnectAsync(_emailConfiguration.PopServer, _emailConfiguration.PopPort, true).ConfigureAwait(true);
+                await emailClient.ConnectAsync(emailSettings.PopServer, emailSettings.PopPort, true).ConfigureAwait(true);
 
                 emailClient.AuthenticationMechanisms.Remove("XOAUTH2");
 
-                await emailClient.AuthenticateAsync(_emailConfiguration.PopUsername, _emailConfiguration.PopPassword).ConfigureAwait(true);
+                await emailClient.AuthenticateAsync(emailSettings.PopUsername, emailSettings.PopPassword).ConfigureAwait(true);
 
                 List<EmailMessage> emails = new List<EmailMessage>();
 
@@ -91,7 +80,7 @@ namespace HiperTrip.Services
             }
         }
 
-        public void SendEmailActivateAccount(EmailAddress emailTo, string name, string subject = "", string content = "")
+        public void SendEmailActivateAccount(EmailAddress emailTo, EmailSettings emailSettings, string name, string subject = "", string content = "")
         {
             subject = "Account Activation - HiperTrip";
 
@@ -99,8 +88,8 @@ namespace HiperTrip.Services
 
             EmailAddress emailFrom = new EmailAddress()
             {
-                Name = _emailConfiguration.NameToReply,
-                Address = _emailConfiguration.EmailToReply
+                Name = emailSettings.NameToReply,
+                Address = emailSettings.EmailToReply
             };
 
             List<EmailAddress> fromAddresses = new List<EmailAddress>
@@ -121,10 +110,10 @@ namespace HiperTrip.Services
                 Content = content
             };
 
-            this.Send(emailMessage);
+            Send(emailMessage, emailSettings);
         }
 
-        public void SendEmail(EmailMessage emailMessage)
+        public void SendEmail(EmailMessage emailMessage, EmailSettings emailSettings)
         {
             if (emailMessage != null)
             {
@@ -144,12 +133,12 @@ namespace HiperTrip.Services
                 using (SmtpClient emailClient = new SmtpClient())
                 {
                     //The last parameter here is to use SSL (Which you should!)
-                    emailClient.Connect(_emailConfiguration.SmtpServer, _emailConfiguration.SmtpPort, SecureSocketOptions.Auto);
+                    emailClient.Connect(emailSettings.SmtpServer, emailSettings.SmtpPort, SecureSocketOptions.Auto);
 
                     //Remove any OAuth functionality as we won't be using it.
                     emailClient.AuthenticationMechanisms.Remove("XOAUTH2");
 
-                    emailClient.Authenticate(_emailConfiguration.SmtpUsername, _emailConfiguration.SmtpPassword);
+                    emailClient.Authenticate(emailSettings.SmtpUsername, emailSettings.SmtpPassword);
 
                     emailClient.Send(message);
 
@@ -158,9 +147,9 @@ namespace HiperTrip.Services
             }
         }
 
-        public bool ValidEmail(string email)
+        public bool ValidEmail(string email, string regExp)
         {
-            return Regex.IsMatch(email, @_emailConfiguration.RegExp);
+            return Regex.IsMatch(email, regExp);
         }
     }
 }

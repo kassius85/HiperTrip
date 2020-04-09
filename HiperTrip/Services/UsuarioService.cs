@@ -308,7 +308,7 @@ namespace HiperTrip.Services
 
             if (!usuarioDto.IsNull())
             {
-                if (_emailService.ValidEmail(usuarioDto.CorreoUsuar))
+                if (_emailService.ValidEmail(usuarioDto.CorreoUsuar, _emailConfiguration.RegExp))
                 {
                     Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
 
@@ -515,7 +515,7 @@ namespace HiperTrip.Services
 
             if (!await ExisteNombreUsuario(usuario.NombreUsuar).ConfigureAwait(true))
             {
-                if (_emailService.ValidEmail(usuario.CorreoUsuar))
+                if (_emailService.ValidEmail(usuario.CorreoUsuar, @_emailConfiguration.RegExp))
                 {
                     if (!await ExisteCorreoUsuario(usuario.CorreoUsuar).ConfigureAwait(true))
                     {
@@ -610,7 +610,7 @@ namespace HiperTrip.Services
             }
 
             // Enviar correo para activar cuenta.
-            _emailService.SendEmail(emailMessage);
+            _emailService.SendEmail(emailMessage, _emailConfiguration);
         }
     }
 }

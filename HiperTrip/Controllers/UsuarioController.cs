@@ -105,7 +105,7 @@ namespace HiperTrip.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!UsuarioExists(id))
+                if (!await _usuarioService.ExisteUsuario(id))
                 {
                     return NotFound();
                 }
@@ -132,11 +132,6 @@ namespace HiperTrip.Controllers
             await _context.SaveChangesAsync();
 
             return usuario;
-        }
-
-        private bool UsuarioExists(string id)
-        {
-            return _context.Usuario.Any(e => e.CodUsuario == id);
         }
     }
 }

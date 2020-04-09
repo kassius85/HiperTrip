@@ -36,6 +36,13 @@ namespace HiperTrip.Interfaces
         Task<Dictionary<string, object>> RecuperarCuenta(UsuarioDto usuario);
 
         /// <summary>
+        /// Cambiar contraseña.
+        /// </summary>
+        /// <param name="recuperaContrasena"></param>
+        /// <returns></returns>
+        Task<Dictionary<string, object>> CambiarContrasena(RecuperaContrasenaDto recuperaContrasena);
+
+        /// <summary>
         /// Devuelve una lista de usuarios.
         /// </summary>
         /// <returns></returns>

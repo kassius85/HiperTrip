@@ -1,4 +1,5 @@
 ﻿using HiperTrip.Interfaces;
+using HiperTrip.ObjectResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.Collections.Generic;
@@ -66,6 +67,12 @@ namespace HiperTrip.Filters
                         case HttpStatusCode.NoContent:
                             {
                                 filterContext.Result = new NoContentResult();
+                                break;
+                            }
+
+                        case HttpStatusCode.PreconditionRequired:
+                            {
+                                filterContext.Result = new PreconditionRequiredObjectResult(objectResult.Value);
                                 break;
                             }
                     }

@@ -250,6 +250,7 @@ namespace HiperTrip.Services
                                             // Enviar correo para activar cuenta.
                                             EnviarCorreo(usuario, randomCode, 2);
 
+                                            httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                                             mensaje = "Ha excedido el número máximo de intentos de activación. Favor revisar su correo e intentar con el nuevo código.";
                                         }
                                         else
@@ -340,24 +341,37 @@ namespace HiperTrip.Services
                 
                     if (!usuarioDto.UsuarActivo.IsStringTrue())
                     {
+                        // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+
                         // Generar código de activación con hash.
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
-
-                        // Actualizar datos de usuario.
-                        _dbContext.Entry(usuario).State = EntityState.Modified;
-
-                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        CambioRestringido cambioRestringidoNuevo = new CambioRestringido()
                         {
+                            CodUsuario = usuario.CodUsuario,
+                            FechaSolic = DateTime.Now,
+                            CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt),
+                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                            CodTipCambCuenta = paramGenUsu.CodActiCuenta,
+                            CodUsuarioNavigation = usuario
+                        };
+
+                        if (await _cambioRestringidoService.InsertaNuenoActivaCuenta(cambioRestringidoNuevo))
+                        {
+                            // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 2);
+
+                            httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
+                            resultado = false;
+                            mensaje = "Su cuenta no ha sido activada. Favor revisar su correo e intentar con el nuevo código.";
                         }
                         else
                         {
-                            httpStatusCode = HttpStatusCode.BadRequest;
+                            httpStatusCode = HttpStatusCode.InternalServerError;
                             resultado = false;
-                            mensaje = "Inconsistencia al salvar datos de usuario.";
+                            mensaje = "Inconsistencia salvando datos de activación de cuenta.";
                         }
                     }
                 }

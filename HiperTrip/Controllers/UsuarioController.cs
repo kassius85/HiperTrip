@@ -1,10 +1,8 @@
 ﻿using Entities.DTOs;
 using Entities.Models;
 using HiperTrip.Interfaces;
-using HiperTrip.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -15,7 +13,6 @@ namespace HiperTrip.Controllers
     [ApiController]
     public class UsuarioController : ControllerBase
     {
-        private readonly DbHiperTripContext _context;
         private readonly IUsuarioService _usuarioService;
 
         public UsuarioController(IUsuarioService usuarioService)
@@ -75,7 +72,7 @@ namespace HiperTrip.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Usuario>>> GetUsuario()
         {
-            return await _context.Usuario.ToListAsync();
+            return null; // await _context.Usuario.ToListAsync();
         }
 
         // GET: api/Usuario/1
@@ -96,7 +93,7 @@ namespace HiperTrip.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(usuario).State = EntityState.Modified;
+            /*_context.Entry(usuario).State = EntityState.Modified;
 
             try
             {
@@ -112,7 +109,7 @@ namespace HiperTrip.Controllers
                 {
                     throw;
                 }
-            }
+            }*/
 
             return NoContent();
         }
@@ -121,14 +118,14 @@ namespace HiperTrip.Controllers
         [HttpDelete("{id}")]
         public async Task<ActionResult<Usuario>> DeleteUsuario(string id)
         {
-            var usuario = await _context.Usuario.FindAsync(id);
+            Usuario usuario = default; //await _context.Usuario.FindAsync(id);
             if (usuario == null)
             {
                 return NotFound();
             }
 
-            _context.Usuario.Remove(usuario);
-            await _context.SaveChangesAsync();
+            //_context.Usuario.Remove(usuario);
+            //await _context.SaveChangesAsync();
 
             return usuario;
         }

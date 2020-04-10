@@ -1,4 +1,6 @@
-﻿namespace HiperTrip.Extensions
+﻿using System;
+
+namespace HiperTrip.Extensions
 {
     public static class ObjectExtension
     {
@@ -13,5 +15,18 @@
         {
             return (objeto == null);
         }
+
+        //public static bool IsEmpty(this object objeto)
+        //{
+        //    switch (Type.GetTypeCode(objeto.GetType().GetProperty("objeto").PropertyType))
+        //    {
+        //        case TypeCode.Int32:
+        //            {
+        //                return 
+
+        //                break;
+        //            }
+        //    }
+        //}
     }
 }

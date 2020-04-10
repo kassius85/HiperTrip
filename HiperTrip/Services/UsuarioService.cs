@@ -6,11 +6,13 @@ using HiperTrip.Extensions;
 using HiperTrip.Interfaces;
 using HiperTrip.Models;
 using HiperTrip.Settings;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,22 +22,28 @@ namespace HiperTrip.Services
     public class UsuarioService : IUsuarioService
     {
         private readonly AppSettings _appSettings;
-        private readonly DbHiperTripContext _context;
+        private readonly DbHiperTripContext _dbContext;
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         private readonly IResultService _resultService;
         private readonly EmailSettings _emailConfiguration;
+        private readonly IActionContextAccessor _accessor;
+        private readonly IParamGenUsuService _paramGenUsuService;
+        private readonly ICambioRestringidoService _cambioRestringidoService;
 
         HttpStatusCode httpStatusCode = default;
         bool resultado = false;
         string mensaje = string.Empty;
 
         public UsuarioService(IOptions<AppSettings> appSettings,
-                              DbHiperTripContext context,
+                              DbHiperTripContext dbContext,
                               IMapper mapper,
                               IEmailService emailService,
                               IResultService resultService,
-                              IOptions<EmailSettings> emailConfiguration)
+                              IOptions<EmailSettings> emailConfiguration,
+                              IActionContextAccessor accessor,
+                              IParamGenUsuService paramGenUsuService,
+                              ICambioRestringidoService cambioRestringidoService)
         {
             if (appSettings.IsNull())
             {
@@ -43,7 +51,7 @@ namespace HiperTrip.Services
             }
 
             _appSettings = appSettings.Value;
-            _context = context;
+            _dbContext = dbContext;
             _mapper = mapper;
             _emailService = emailService;
             _resultService = resultService;
@@ -52,6 +60,10 @@ namespace HiperTrip.Services
             {
                 _emailConfiguration = emailConfiguration.Value;
             }
+
+            _accessor = accessor;
+            _paramGenUsuService = paramGenUsuService;
+            _cambioRestringidoService = cambioRestringidoService;
         }
 
         public async Task<Dictionary<string, object>> CrearUsuario(UsuarioDto usuarioNuevo)
@@ -70,12 +82,15 @@ namespace HiperTrip.Services
                         // Mapear datos de DTO al modelo.
                         usuario = _mapper.Map<Usuario>(usuarioNuevo);
 
+                        // Obtener fecha de registro.
+                        usuario.FechaRegist = DateTime.Now;
+
                         // Inicializar la contraseña con Hash y el Salt.
                         usuario.ContrasHash = contrhash;
                         usuario.ContrasSalt = contrsalt;
 
                         // Generar nuevo código de opción.
-                        string maxcod = await _context.Usuario.MaxAsync(x => x.CodUsuario).ConfigureAwait(true) ?? "0";
+                        string maxcod = await _dbContext.Usuario.MaxAsync(x => x.CodUsuario).ConfigureAwait(true) ?? "0";
                         string newcod = (int.Parse(maxcod, CultureInfo.InvariantCulture) + 1).ToString(CultureInfo.InvariantCulture).Trim().PadLeft(15, '0');
 
                         usuario.CodUsuario = newcod;
@@ -84,12 +99,25 @@ namespace HiperTrip.Services
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = randomCode.BuildHashCode(contrsalt);
+                        // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+
+                        // Incicializar datos para la solicitud de activación de cuenta.
+                        CambioRestringido cambioRestringido = new CambioRestringido()
+                        {
+                            CodUsuario = newcod,
+                            FechaSolic = DateTime.Now,
+                            CodActivHash = randomCode.BuildHashCode(contrsalt),
+                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                            CodTipCambCuenta = paramGenUsu.CodActiCuenta
+                        };
+
+                        usuario.CambioRestringido.Add(cambioRestringido);
 
                         // Salvar datos de usuario.
-                        await _context.Usuario.AddAsync(usuario);
+                        await _dbContext.Usuario.AddAsync(usuario);
 
-                        if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
                         {
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 1);
@@ -140,48 +168,119 @@ namespace HiperTrip.Services
 
             if (!activarCuenta.IsNull())
             {
-                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == activarCuenta.CodUsuario).ConfigureAwait(true);
+                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoActivaCuenta(activarCuenta.CodUsuario);
 
-                if (!usuario.IsNull())
+                if (!cambioRestringido.IsNull())
                 {
-                    if (!usuario.UsuarActivo.IsStringTrue())
+                    Usuario usuario = cambioRestringido.CodUsuarioNavigation;
+
+                    if (!usuario.IsNull())
                     {
-                        // Verificar el códifo de activación.
-                        if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CodActivHash))
+                        if (!usuario.UsuarActivo.IsStringTrue())
                         {
-                            usuario.CodActivHash = Encoding.UTF8.GetBytes(string.Empty);
-                            usuario.UsuarActivo = "S";
+                            // Obtener el nuevo código de intento.
+                            string maxcod = cambioRestringido.IntentoCambio.Max(x => x.CodIntento) ?? "0";
+                            string newcod = (int.Parse(maxcod) + 1).ToString().Trim().PadLeft(2, '0');
 
-                            _context.Entry(usuario).State = EntityState.Modified;
-
-                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            IntentoCambio intentoCambio = new IntentoCambio()
                             {
-                                httpStatusCode = HttpStatusCode.OK;
-                                resultado = true;
-                                mensaje = "Cuenta activada satisfactoriamente!";
+                                CodUsuario = usuario.CodUsuario,
+                                FechaSolic = cambioRestringido.FechaSolic,
+                                CodIntento = newcod,
+                                IpIntento = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                                FechaIntento = DateTime.Now,
+                                IntenExitoso = "S",
+                                CambioRestringido = cambioRestringido
+                            };
+
+                            // Verificar el códifo de activación.
+                            if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
+                            {
+                                usuario.UsuarActivo = "S";                                
+
+                                cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                {
+                                    httpStatusCode = HttpStatusCode.OK;
+                                    resultado = true;
+                                    mensaje = "Cuenta activada satisfactoriamente!";
+                                }
+                                else
+                                {
+                                    httpStatusCode = HttpStatusCode.InternalServerError;
+                                    mensaje = "Inconsistencia actualizando datos de activación de cuenta.";
+                                }
                             }
                             else
                             {
-                                mensaje = "Inconsistencia al activar cuenta.";
+                                intentoCambio.IntenExitoso = "N";
+
+                                cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                {
+                                    int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
+
+                                    // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                                    ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+
+                                    if (cantIntentos < paramGenUsu.CantIntentAct) // Otro intento fallido.
+                                    {
+                                        mensaje = "El código no es válido.";
+                                    }
+                                    else // Llegó al límite de intentos de activación de la cuenta.
+                                    {
+                                        // Generar código de activación con hash.
+                                        int tamano = 6;
+                                        string randomCode = tamano.RandomString();
+
+                                        CambioRestringido cambioRestringidoNuevo = new CambioRestringido()
+                                        {
+                                            CodUsuario = usuario.CodUsuario,
+                                            FechaSolic = DateTime.Now,
+                                            CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt),
+                                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                                            CodTipCambCuenta = paramGenUsu.CodActiCuenta,
+                                            CodUsuarioNavigation = usuario
+                                        };
+
+                                        if (await _cambioRestringidoService.InsertaNuenoActivaCuenta(cambioRestringidoNuevo))
+                                        {
+                                            // Enviar correo para activar cuenta.
+                                            EnviarCorreo(usuario, randomCode, 2);
+
+                                            mensaje = "Ha excedido el número máximo de intentos de activación. Favor revisar su correo e intentar con el nuevo código.";
+                                        }
+                                        else
+                                        {
+                                            httpStatusCode = HttpStatusCode.InternalServerError;
+                                            mensaje = "Inconsistencia salvando datos de activación de cuenta.";
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    httpStatusCode = HttpStatusCode.InternalServerError;
+                                    mensaje = "Inconsistencia actualizando datos de activación de cuenta.";
+                                }                                
                             }
                         }
                         else
                         {
-                            // Lógica para validar intentos de recuperación de contraseña.
-                            //
-
-                            mensaje = "El código no es válido.";
+                            mensaje = "La cuenta fue activada con anterioridad.";
                         }
                     }
                     else
                     {
-                        mensaje = "La cuenta fue activada con anterioridad.";
+                        httpStatusCode = HttpStatusCode.NotFound;
+                        mensaje = "El usuario no existe.";
                     }
                 }
                 else
                 {
                     httpStatusCode = HttpStatusCode.NotFound;
-                    mensaje = "El usuario no existe.";
+                    mensaje = "No existe solicitud de activación de cuenta pendiente.";
                 }
             }
             else
@@ -206,29 +305,22 @@ namespace HiperTrip.Services
 
             if (!usuarioDto.IsNull())
             {
-                // Verificar si existe el nombre de usuario o correo
-                if (!string.IsNullOrEmpty(usuarioDto.NombreUsuar))
+                // Verificar si existe el correo o número de celular
+                if (!string.IsNullOrEmpty(usuarioDto.CorreoUsuar))
                 {
-                    usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.NombreUsuar.ToUpper(CultureInfo.InvariantCulture) == usuarioDto.NombreUsuar.ToUpper(CultureInfo.InvariantCulture)).ConfigureAwait(true);
+                    usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
                 }
                 else
                 {
-                    if (!string.IsNullOrEmpty(usuarioDto.CorreoUsuar))
+                    if (!string.IsNullOrEmpty(usuarioDto.NumCelular))
                     {
-                        usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+                        usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.NumCelular == usuarioDto.NumCelular).ConfigureAwait(true);
                     }
                     else
                     {
-                        if (!string.IsNullOrEmpty(usuarioDto.NumCelular))
-                        {
-                            usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.NumCelular == usuarioDto.NumCelular).ConfigureAwait(true);
-                        }
-                        else
-                        {
-                            httpStatusCode = HttpStatusCode.BadRequest;
-                            resultado = false;
-                            mensaje = "Debe suministrar el nombre de usuario, correo o teléfono para la autenticación.";
-                        }
+                        httpStatusCode = HttpStatusCode.BadRequest;
+                        resultado = false;
+                        mensaje = "Debe suministrar el correo o teléfono para la autenticación.";
                     }
                 }
             }
@@ -252,12 +344,12 @@ namespace HiperTrip.Services
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                        //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
 
                         // Actualizar datos de usuario.
-                        _context.Entry(usuario).State = EntityState.Modified;
+                        _dbContext.Entry(usuario).State = EntityState.Modified;
 
-                        if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
                         {
                             EnviarCorreo(usuario, randomCode, 2);
                         }
@@ -310,7 +402,7 @@ namespace HiperTrip.Services
             {
                 if (_emailService.ValidEmail(usuarioDto.CorreoUsuar, _emailConfiguration.RegExp))
                 {
-                    Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+                    Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
 
                     if (!usuario.IsNull())
                     {
@@ -320,10 +412,10 @@ namespace HiperTrip.Services
                             int tamano = 6;
                             string randomCode = tamano.RandomString();
 
-                            usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                            /*usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
 
                             // Actualizar datos de usuario.
-                            _context.Entry(usuario).State = EntityState.Modified;
+                            _dbContext.Entry(usuario).State = EntityState.Modified;
 
                             if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
                             {
@@ -336,7 +428,7 @@ namespace HiperTrip.Services
                             else
                             {
                                 mensaje = "Inconsistencia al salvar datos de usuario.";
-                            }
+                            }*/
                         }
                         else // Lógica para enviar correo de activar cuenta.
                         {
@@ -344,12 +436,12 @@ namespace HiperTrip.Services
                             int tamano = 6;
                             string randomCode = tamano.RandomString();
 
-                            usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                            //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
 
                             // Salvar datos de usuario.
-                            await _context.Usuario.AddAsync(usuario);
+                            await _dbContext.Usuario.AddAsync(usuario);
 
-                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
                             {
                                 // Enviar correo para activar cuenta.
                                 EnviarCorreo(usuario, randomCode, 1);
@@ -388,7 +480,7 @@ namespace HiperTrip.Services
 
             if (!recuperaContrasena.IsNull())
             {
-                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == recuperaContrasena.ActivaCuenta.CodUsuario).ConfigureAwait(true);
+                Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == recuperaContrasena.ActivaCuenta.CodUsuario).ConfigureAwait(true);
 
                 if (!usuario.IsNull())
                 {
@@ -401,9 +493,9 @@ namespace HiperTrip.Services
                             usuario.ContrasSalt = contrsalt;
 
                             // Actualizar datos de usuario.
-                            _context.Entry(usuario).State = EntityState.Modified;
+                            _dbContext.Entry(usuario).State = EntityState.Modified;
 
-                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
                             {
                                 httpStatusCode = HttpStatusCode.OK;
                                 resultado = true;
@@ -422,12 +514,12 @@ namespace HiperTrip.Services
                         int tamano = 6;
                         string randomCode = tamano.RandomString();
 
-                        usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                        //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
 
                         // Salvar datos de usuario.
-                        await _context.Usuario.AddAsync(usuario);
+                        await _dbContext.Usuario.AddAsync(usuario);
 
-                        if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
                         {
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 1);
@@ -455,7 +547,7 @@ namespace HiperTrip.Services
 
         public async Task<Dictionary<string, object>> GetUsuarios()
         {
-            IList<Usuario> resultado = await _context.Usuario.ToListAsync().ConfigureAwait(true);
+            IList<Usuario> resultado = await _dbContext.Usuario.ToListAsync().ConfigureAwait(true);
 
             IList<Usuario> listaUsuarios = _mapper.Map<IList<Usuario>>(resultado);
 
@@ -472,7 +564,7 @@ namespace HiperTrip.Services
 
             if (!string.IsNullOrEmpty(id))
             {
-                Usuario usuario = await _context.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == id).ConfigureAwait(true);
+                Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == id).ConfigureAwait(true);
 
                 if (!usuario.IsNull())
                 {
@@ -501,7 +593,7 @@ namespace HiperTrip.Services
 
         public async Task<bool> ExisteUsuario(string id)
         {
-            return await _context.Usuario.AnyAsync(e => e.CodUsuario == id).ConfigureAwait(true);
+            return await _dbContext.Usuario.AnyAsync(e => e.CodUsuario == id).ConfigureAwait(true);
         }
 
         //-----------------------------------------------------------------------------------------------------------------------------------
@@ -513,46 +605,32 @@ namespace HiperTrip.Services
             resultado = true;
             mensaje = "";
 
-            if (!await ExisteNombreUsuario(usuario.NombreUsuar).ConfigureAwait(true))
+            if (_emailService.ValidEmail(usuario.CorreoUsuar, @_emailConfiguration.RegExp))
             {
-                if (_emailService.ValidEmail(usuario.CorreoUsuar, @_emailConfiguration.RegExp))
+                if (!await ExisteCorreoUsuario(usuario.CorreoUsuar).ConfigureAwait(true))
                 {
-                    if (!await ExisteCorreoUsuario(usuario.CorreoUsuar).ConfigureAwait(true))
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        httpStatusCode = HttpStatusCode.BadRequest;
-                        resultado = false;
-                        mensaje = "El correo ya está asociado a otra cuenta.";
-                    }
+                    return true;
                 }
                 else
                 {
                     httpStatusCode = HttpStatusCode.BadRequest;
                     resultado = false;
-                    mensaje = "La dirección de correo no es válida.";
+                    mensaje = "El correo ya está asociado a otra cuenta.";
                 }
             }
             else
             {
                 httpStatusCode = HttpStatusCode.BadRequest;
                 resultado = false;
-                mensaje = "El nombre de usuario ya existe.";
+                mensaje = "La dirección de correo no es válida.";
             }
 
             return false;
         }
 
-        private async Task<bool> ExisteNombreUsuario(string NombreUsu)
-        {
-            return await _context.Usuario.AnyAsync(e => e.NombreUsuar == NombreUsu).ConfigureAwait(true);
-        }
-
         private async Task<bool> ExisteCorreoUsuario(string correoUsu)
         {
-            return await _context.Usuario.AnyAsync(e => e.CorreoUsuar == correoUsu).ConfigureAwait(true);
+            return await _dbContext.Usuario.AnyAsync(e => e.CorreoUsuar == correoUsu).ConfigureAwait(true);
         }
 
         private void EnviarCorreo(Usuario usuario, string codigoAct, int opcion = 1)

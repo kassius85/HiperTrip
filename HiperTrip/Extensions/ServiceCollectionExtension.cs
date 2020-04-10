@@ -50,6 +50,8 @@ namespace HiperTrip.Extensions
             services.AddTransient<IEmailService, EmailService>(); // Envío de correos.
             services.AddScoped<IUsuarioService, UsuarioService>();
             services.AddScoped<IResultService, ResultService>();
+            services.AddScoped<IParamGenUsuService, ParamGenUsuService>();
+            services.AddScoped<ICambioRestringidoService, CambioRestringidoService>();
         }
 
         public static void ConfigureSettings(this IServiceCollection services, IConfiguration Configuration, out IConfigurationSection appSettingsSection)

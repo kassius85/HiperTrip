@@ -10,25 +10,19 @@ namespace HiperTrip.Services
     public class CambioRestringidoService : ICambioRestringidoService
     {
         private readonly DbHiperTripContext _dbContext;
-        private readonly IParamGenUsuService _paramGenUsuService;
 
-        public CambioRestringidoService(DbHiperTripContext dbContext,
-                                        IParamGenUsuService paramGenUsuService)
+        public CambioRestringidoService(DbHiperTripContext dbContext)
         {
             _dbContext = dbContext;
-            _paramGenUsuService = paramGenUsuService;
         }
 
-        public async Task<CambioRestringido> GetUltimoActivaCuenta(string codUsuario)
+        public async Task<CambioRestringido> GetUltimoCambioCuenta(string codUsuario, string codTipoCambCuenta)
         {
-            // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-            ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
-
             return await _dbContext.CambioRestringido
                                    .Include(a => a.CodUsuarioNavigation)
                                    .Include(b => b.IntentoCambio)
                                    .OrderByDescending(x => x.FechaSolic)
-                                   .FirstOrDefaultAsync(z => z.CodUsuario == codUsuario && z.CodTipCambCuenta == paramGenUsu.CodActiCuenta);
+                                   .FirstOrDefaultAsync(z => z.CodUsuario == codUsuario && z.CodTipCambCuenta == codTipoCambCuenta);
         }
 
         public async Task<bool> ModificaUltimoActivaCuenta(CambioRestringido cambioRestringido, IntentoCambio intentoCambio)
@@ -40,7 +34,7 @@ namespace HiperTrip.Services
             return (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0);
         }
 
-        public async Task<bool> InsertaNuenoActivaCuenta(CambioRestringido cambioRestringido)
+        public async Task<bool> InsertaNuevoActivaCuenta(CambioRestringido cambioRestringido)
         {
             await _dbContext.CambioRestringido.AddAsync(cambioRestringido);
 

@@ -14,7 +14,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace HiperTrip.Services
@@ -31,9 +30,9 @@ namespace HiperTrip.Services
         private readonly IParamGenUsuService _paramGenUsuService;
         private readonly ICambioRestringidoService _cambioRestringidoService;
 
-        HttpStatusCode httpStatusCode = default;
-        bool resultado = false;
-        string mensaje = string.Empty;
+        private HttpStatusCode httpStatusCode = default;
+        private bool resultado = false;
+        private string mensaje = string.Empty;
 
         public UsuarioService(IOptions<AppSettings> appSettings,
                               DbHiperTripContext dbContext,
@@ -95,24 +94,11 @@ namespace HiperTrip.Services
 
                         usuario.CodUsuario = newcod;
 
-                        // Generar código de activación con hash.
-                        int tamano = 6;
-                        string randomCode = tamano.RandomString();
-
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
                         ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
 
                         // Incicializar datos para la solicitud de activación de cuenta.
-                        CambioRestringido cambioRestringido = new CambioRestringido()
-                        {
-                            CodUsuario = newcod,
-                            FechaSolic = DateTime.Now,
-                            CodActivHash = randomCode.BuildHashCode(contrsalt),
-                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
-                            CodTipCambCuenta = paramGenUsu.CodActiCuenta
-                        };
-
-                        usuario.CambioRestringido.Add(cambioRestringido);
+                        CambioRestringido cambioRestringido = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
                         // Salvar datos de usuario.
                         await _dbContext.Usuario.AddAsync(usuario);
@@ -168,7 +154,10 @@ namespace HiperTrip.Services
 
             if (!activarCuenta.IsNull())
             {
-                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoActivaCuenta(activarCuenta.CodUsuario);
+                // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+
+                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoCambioCuenta(activarCuenta.CodUsuario, paramGenUsu.CodActiCuenta);
 
                 if (!cambioRestringido.IsNull())
                 {
@@ -178,22 +167,10 @@ namespace HiperTrip.Services
                     {
                         if (!usuario.UsuarActivo.IsStringTrue())
                         {
-                            // Obtener el nuevo código de intento.
-                            string maxcod = cambioRestringido.IntentoCambio.Max(x => x.CodIntento) ?? "0";
-                            string newcod = (int.Parse(maxcod) + 1).ToString().Trim().PadLeft(2, '0');
+                            // Crear nuevo intento de cambio.
+                            IntentoCambio intentoCambio = CreaIntentoCambio(cambioRestringido);
 
-                            IntentoCambio intentoCambio = new IntentoCambio()
-                            {
-                                CodUsuario = usuario.CodUsuario,
-                                FechaSolic = cambioRestringido.FechaSolic,
-                                CodIntento = newcod,
-                                IpIntento = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
-                                FechaIntento = DateTime.Now,
-                                IntenExitoso = "S",
-                                CambioRestringido = cambioRestringido
-                            };
-
-                            // Verificar el códifo de activación.
+                            // Verificar el código de activación.
                             if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                             {
                                 usuario.UsuarActivo = "S";                                
@@ -204,7 +181,7 @@ namespace HiperTrip.Services
                                 {
                                     httpStatusCode = HttpStatusCode.OK;
                                     resultado = true;
-                                    mensaje = "Cuenta activada satisfactoriamente!";
+                                    mensaje = "Cuenta activada con éxito!";
                                 }
                                 else
                                 {
@@ -215,42 +192,26 @@ namespace HiperTrip.Services
                             else
                             {
                                 intentoCambio.IntenExitoso = "N";
+                                int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
 
                                 cambioRestringido.IntentoCambio.Add(intentoCambio);
 
                                 if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
                                 {
-                                    int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
-
-                                    // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                                    ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
-
                                     if (cantIntentos < paramGenUsu.CantIntentAct) // Otro intento fallido.
                                     {
                                         mensaje = "El código no es válido.";
                                     }
                                     else // Llegó al límite de intentos de activación de la cuenta.
                                     {
-                                        // Generar código de activación con hash.
-                                        int tamano = 6;
-                                        string randomCode = tamano.RandomString();
+                                        // Incicializar datos para la solicitud de activación de cuenta.
+                                        CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                                        CambioRestringido cambioRestringidoNuevo = new CambioRestringido()
-                                        {
-                                            CodUsuario = usuario.CodUsuario,
-                                            FechaSolic = DateTime.Now,
-                                            CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt),
-                                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
-                                            CodTipCambCuenta = paramGenUsu.CodActiCuenta,
-                                            CodUsuarioNavigation = usuario
-                                        };
-
-                                        if (await _cambioRestringidoService.InsertaNuenoActivaCuenta(cambioRestringidoNuevo))
+                                        if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
                                         {
                                             // Enviar correo para activar cuenta.
                                             EnviarCorreo(usuario, randomCode, 2);
 
-                                            httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                                             mensaje = "Ha excedido el número máximo de intentos de activación. Favor revisar su correo e intentar con el nuevo código.";
                                         }
                                         else
@@ -344,21 +305,10 @@ namespace HiperTrip.Services
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
                         ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
 
-                        // Generar código de activación con hash.
-                        int tamano = 6;
-                        string randomCode = tamano.RandomString();
+                        // Incicializar datos para la solicitud de activación de cuenta.
+                        CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                        CambioRestringido cambioRestringidoNuevo = new CambioRestringido()
-                        {
-                            CodUsuario = usuario.CodUsuario,
-                            FechaSolic = DateTime.Now,
-                            CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt),
-                            IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
-                            CodTipCambCuenta = paramGenUsu.CodActiCuenta,
-                            CodUsuarioNavigation = usuario
-                        };
-
-                        if (await _cambioRestringidoService.InsertaNuenoActivaCuenta(cambioRestringidoNuevo))
+                        if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
                         {
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 2);
@@ -420,18 +370,21 @@ namespace HiperTrip.Services
 
                     if (!usuario.IsNull())
                     {
+                        // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+
                         if (usuario.UsuarActivo.IsStringTrue())
                         {
-                            // Generar código para recuperación de contraseña con hash.
-                            int tamano = 6;
-                            string randomCode = tamano.RandomString();
+                            // Incicializar datos para la solicitud de recuperación de cuenta.
+                            CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
 
-                            /*usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                            // Añadir nueva solicitud de cambio.
+                            await _dbContext.CambioRestringido.AddAsync(cambioRestringidoNuevo);
 
                             // Actualizar datos de usuario.
                             _dbContext.Entry(usuario).State = EntityState.Modified;
 
-                            if (await _context.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
                             {
                                 EnviarCorreo(usuario, randomCode, 3);
 
@@ -441,28 +394,34 @@ namespace HiperTrip.Services
                             }
                             else
                             {
+                                httpStatusCode = HttpStatusCode.InternalServerError;
                                 mensaje = "Inconsistencia al salvar datos de usuario.";
-                            }*/
+                            }
                         }
                         else // Lógica para enviar correo de activar cuenta.
                         {
-                            // Generar código de activación con hash.
-                            int tamano = 6;
-                            string randomCode = tamano.RandomString();
+                            // Incicializar datos para la solicitud de activación de cuenta.
+                            CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                            //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
+                            // Añadir nueva solicitud de cambio.
+                            await _dbContext.CambioRestringido.AddAsync(cambioRestringidoNuevo);
 
-                            // Salvar datos de usuario.
-                            await _dbContext.Usuario.AddAsync(usuario);
+                            // Actualizar datos de usuario.
+                            _dbContext.Entry(usuario).State = EntityState.Modified;
 
-                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
                             {
                                 // Enviar correo para activar cuenta.
-                                EnviarCorreo(usuario, randomCode, 1);
-                            }
+                                EnviarCorreo(usuario, randomCode, 2);
 
-                            httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                            mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo.";
+                                httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
+                                mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener código.";
+                            }
+                            else
+                            {
+                                httpStatusCode = HttpStatusCode.InternalServerError;
+                                mensaje = "Inconsistencia al salvar datos de usuario.";
+                            }                            
                         }
                     }
                     else
@@ -494,58 +453,122 @@ namespace HiperTrip.Services
 
             if (!recuperaContrasena.IsNull())
             {
-                Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == recuperaContrasena.ActivaCuenta.CodUsuario).ConfigureAwait(true);
+                // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
+                ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
 
-                if (!usuario.IsNull())
+                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoCambioCuenta(recuperaContrasena.CodUsuario, paramGenUsu.CodRecupCuenta);
+
+                if (!cambioRestringido.IsNull())
                 {
-                    if (usuario.UsuarActivo.IsStringTrue())
+                    if (cambioRestringido.IntentoCambio.Any(x => x.IntenExitoso.IsStringTrue()))
                     {
-                        if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                        Usuario usuario = cambioRestringido.CodUsuarioNavigation;
+
+                        if (!usuario.IsNull())
                         {
-                            // Inicializar la contraseña con Hash y el Salt.
-                            usuario.ContrasHash = contrhash;
-                            usuario.ContrasSalt = contrsalt;
-
-                            // Actualizar datos de usuario.
-                            _dbContext.Entry(usuario).State = EntityState.Modified;
-
-                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
+                            if (usuario.UsuarActivo.IsStringTrue())
                             {
-                                httpStatusCode = HttpStatusCode.OK;
-                                resultado = true;
-                                mensaje = "Contraseña actualizada con éxito!";
+                                if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                                {
+                                    // Inicializar la contraseña con Hash y el Salt.
+                                    usuario.ContrasHash = contrhash;
+                                    usuario.ContrasSalt = contrsalt;
+
+                                    // Crear nuevo intento de cambio.
+                                    IntentoCambio intentoCambio = CreaIntentoCambio(cambioRestringido);
+
+                                    // Verificar el código de recuperación.
+                                    if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
+                                    {
+                                        cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                        if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                        {
+                                            httpStatusCode = HttpStatusCode.OK;
+                                            resultado = true;
+                                            mensaje = "Cuenta recuperada con éxito!";
+                                        }
+                                        else
+                                        {
+                                            httpStatusCode = HttpStatusCode.InternalServerError;
+                                            mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
+                                        }
+                                    }
+                                    else
+                                    {
+                                        intentoCambio.IntenExitoso = "N";
+                                        int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
+
+                                        cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                        if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                        {
+                                            if (cantIntentos < paramGenUsu.CantIntentRecu) // Otro intento fallido.
+                                            {
+                                                mensaje = "El código de recuperación de contraseña no es válido.";
+                                            }
+                                            else // Llegó al límite de intentos de activación de la cuenta.
+                                            {
+                                                // Incicializar datos para la solicitud de recuperación de contraseña.
+                                                CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
+
+                                                if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                                {
+                                                    // Enviar correo para recuperar contraseña.
+                                                    EnviarCorreo(usuario, randomCode, 3);
+
+                                                    mensaje = "Ha excedido el número máximo de intentos de recuperación de contraseña. Favor revisar su correo e intentar con el nuevo código.";
+                                                }
+                                                else
+                                                {
+                                                    httpStatusCode = HttpStatusCode.InternalServerError;
+                                                    mensaje = "Inconsistencia salvando datos de recuperación de contraseña.";
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            httpStatusCode = HttpStatusCode.InternalServerError;
+                                            mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
+                                        }
+                                    }
+                                }
                             }
-                            else
+                            else // Lógica para enviar correo de activar cuenta.
                             {
-                                mensaje = "Inconsistencia al salvar datos de usuario.";
-                            };
+                                // Incicializar datos para la solicitud de activación de cuenta.
+                                CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
+                                if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                {
+                                    // Enviar correo para activar cuenta.
+                                    EnviarCorreo(usuario, randomCode, 2);
+
+                                    httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
+                                    mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener código.";
+                                }
+                                else
+                                {
+                                    httpStatusCode = HttpStatusCode.InternalServerError;
+                                    mensaje = "Inconsistencia salvando datos de recuperación de contraseña.";
+                                }
+                            }
                         }
-                    }
-                    else // Lógica para enviar correo de activar cuenta.
-                    {
-                        // Generar código de activación con hash.
-                        int tamano = 6;
-                        string randomCode = tamano.RandomString();
-
-                        //usuario.CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt);
-
-                        // Salvar datos de usuario.
-                        await _dbContext.Usuario.AddAsync(usuario);
-
-                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) == 1)
+                        else
                         {
-                            // Enviar correo para activar cuenta.
-                            EnviarCorreo(usuario, randomCode, 1);
+                            httpStatusCode = HttpStatusCode.NotFound;
+                            mensaje = "El usuario no existe.";
                         }
-
-                        httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                        mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo.";
                     }
+                    else
+                    {
+                        mensaje = "La contraseña fue recuperada con anterioridad. Si olvidó su nueva contraseña debe repetir el proceso de recuperación de contraseña desde el inicio.";
+                    }                    
                 }
                 else
                 {
-                    mensaje = "El usuario no existe.";
+                    httpStatusCode = HttpStatusCode.NotFound;
+                    mensaje = "No existe solicitud de recuperación de cuenta pendiente.";
                 }
             }
             else
@@ -703,6 +726,47 @@ namespace HiperTrip.Services
 
             // Enviar correo para activar cuenta.
             _emailService.SendEmail(emailMessage, _emailConfiguration);
+        }
+
+        private CambioRestringido CreaCambioRestringido(Usuario usuario, string codTipCambCuenta, out string randomCode)
+        {
+            // Generar código de activación con hash.
+            int tamano = 6;
+            randomCode = tamano.RandomString();
+
+            CambioRestringido cambioRestringido = new CambioRestringido()
+            {
+                CodUsuario = usuario.CodUsuario,
+                FechaSolic = DateTime.Now,
+                CodActivHash = randomCode.BuildHashCode(usuario.ContrasSalt),
+                IpSolicita = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                CodTipCambCuenta = codTipCambCuenta,
+                CodUsuarioNavigation = usuario
+            };
+
+            usuario.CambioRestringido.Add(cambioRestringido);
+
+            return cambioRestringido;
+        }
+
+        private IntentoCambio CreaIntentoCambio(CambioRestringido cambioRestringido)
+        {
+            // Generar nuevo código de intento.
+            string maxcod = cambioRestringido.IntentoCambio.Max(x => x.CodIntento) ?? "0";
+            string newcod = (int.Parse(maxcod) + 1).ToString().Trim().PadLeft(2, '0');
+
+            IntentoCambio intentoCambio = new IntentoCambio()
+            {
+                CodUsuario = cambioRestringido.CodUsuarioNavigation.CodUsuario,
+                FechaSolic = cambioRestringido.FechaSolic,
+                CodIntento = newcod,
+                IpIntento = _accessor.ActionContext.HttpContext.Connection.RemoteIpAddress.ToString(),
+                FechaIntento = DateTime.Now,
+                IntenExitoso = "S",
+                CambioRestringido = cambioRestringido
+            };
+
+            return intentoCambio;
         }
     }
 }

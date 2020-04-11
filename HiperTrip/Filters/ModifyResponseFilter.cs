@@ -75,6 +75,12 @@ namespace HiperTrip.Filters
                                 filterContext.Result = new PreconditionRequiredObjectResult(objectResult.Value);
                                 break;
                             }
+
+                        case HttpStatusCode.InternalServerError:
+                            {
+                                filterContext.Result = new InternalServerErrorObjectResult(objectResult.Value);
+                                break;
+                            }
                     }
 
                     valorResult.Remove("StatusCode");

@@ -10,10 +10,10 @@ namespace HiperTrip.Interfaces
         /// </summary>
         /// <param name="codUsuario"></param>
         /// <returns></returns>
-        Task<CambioRestringido> GetUltimoActivaCuenta(string codUsuario);
+        Task<CambioRestringido> GetUltimoCambioCuenta(string codUsuario, string codTipoCambCuenta);
 
         Task<bool> ModificaUltimoActivaCuenta(CambioRestringido cambioRestringido, IntentoCambio intentoCambio);
 
-        Task<bool> InsertaNuenoActivaCuenta(CambioRestringido cambioRestringido);
+        Task<bool> InsertaNuevoActivaCuenta(CambioRestringido cambioRestringido);
     }
 }

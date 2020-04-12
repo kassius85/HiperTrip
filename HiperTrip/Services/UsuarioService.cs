@@ -315,7 +315,7 @@ namespace HiperTrip.Services
 
                             httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                             resultado = false;
-                            mensaje = "Su cuenta no ha sido activada. Favor revisar su correo e intentar con el nuevo código.";
+                            mensaje = "Debe activar la cuenta antes de entrar a la aplicación. Revise su correo para obtener código.";
                         }
                         else
                         {
@@ -545,7 +545,7 @@ namespace HiperTrip.Services
                                     EnviarCorreo(usuario, randomCode, 2);
 
                                     httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                                    mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener código.";
+                                    mensaje = "Debe activar la cuenta antes de cambiar la contraseña. Revise su correo para obtener código.";
                                 }
                                 else
                                 {

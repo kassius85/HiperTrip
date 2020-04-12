@@ -460,7 +460,7 @@ namespace HiperTrip.Services
 
                 if (!cambioRestringido.IsNull())
                 {
-                    if (cambioRestringido.IntentoCambio.Any(x => x.IntenExitoso.IsStringTrue()))
+                    if (!cambioRestringido.IntentoCambio.Any(x => x.IntenExitoso.IsStringTrue()))
                     {
                         Usuario usuario = cambioRestringido.CodUsuarioNavigation;
 
@@ -468,18 +468,18 @@ namespace HiperTrip.Services
                         {
                             if (usuario.UsuarActivo.IsStringTrue())
                             {
-                                if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                                // Crear nuevo intento de cambio.
+                                IntentoCambio intentoCambio = CreaIntentoCambio(cambioRestringido);
+
+                                // Verificar el código de recuperación.
+                                if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                                 {
-                                    // Inicializar la contraseña con Hash y el Salt.
-                                    usuario.ContrasHash = contrhash;
-                                    usuario.ContrasSalt = contrsalt;
-
-                                    // Crear nuevo intento de cambio.
-                                    IntentoCambio intentoCambio = CreaIntentoCambio(cambioRestringido);
-
-                                    // Verificar el código de recuperación.
-                                    if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
+                                    if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
                                     {
+                                        // Inicializar la contraseña con Hash y el Salt.
+                                        usuario.ContrasHash = contrhash;
+                                        usuario.ContrasSalt = contrsalt;                                    
+
                                         cambioRestringido.IntentoCambio.Add(intentoCambio);
 
                                         if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
@@ -494,43 +494,43 @@ namespace HiperTrip.Services
                                             mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
                                         }
                                     }
+                                }
+                                else
+                                {
+                                    intentoCambio.IntenExitoso = "N";
+                                    int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
+
+                                    cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                    if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                    {
+                                        if (cantIntentos < paramGenUsu.CantIntentRecu) // Otro intento fallido.
+                                        {
+                                            mensaje = "El código de recuperación de contraseña no es válido.";
+                                        }
+                                        else // Llegó al límite de intentos de activación de la cuenta.
+                                        {
+                                            // Incicializar datos para la solicitud de recuperación de contraseña.
+                                            CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
+
+                                            if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                            {
+                                                // Enviar correo para recuperar contraseña.
+                                                EnviarCorreo(usuario, randomCode, 3);
+
+                                                mensaje = "Ha excedido el número máximo de intentos de recuperación de contraseña. Favor revisar su correo e intentar con el nuevo código.";
+                                            }
+                                            else
+                                            {
+                                                httpStatusCode = HttpStatusCode.InternalServerError;
+                                                mensaje = "Inconsistencia salvando datos de recuperación de contraseña.";
+                                            }
+                                        }
+                                    }
                                     else
                                     {
-                                        intentoCambio.IntenExitoso = "N";
-                                        int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
-
-                                        cambioRestringido.IntentoCambio.Add(intentoCambio);
-
-                                        if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
-                                        {
-                                            if (cantIntentos < paramGenUsu.CantIntentRecu) // Otro intento fallido.
-                                            {
-                                                mensaje = "El código de recuperación de contraseña no es válido.";
-                                            }
-                                            else // Llegó al límite de intentos de activación de la cuenta.
-                                            {
-                                                // Incicializar datos para la solicitud de recuperación de contraseña.
-                                                CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
-
-                                                if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
-                                                {
-                                                    // Enviar correo para recuperar contraseña.
-                                                    EnviarCorreo(usuario, randomCode, 3);
-
-                                                    mensaje = "Ha excedido el número máximo de intentos de recuperación de contraseña. Favor revisar su correo e intentar con el nuevo código.";
-                                                }
-                                                else
-                                                {
-                                                    httpStatusCode = HttpStatusCode.InternalServerError;
-                                                    mensaje = "Inconsistencia salvando datos de recuperación de contraseña.";
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            httpStatusCode = HttpStatusCode.InternalServerError;
-                                            mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
-                                        }
+                                        httpStatusCode = HttpStatusCode.InternalServerError;
+                                        mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
                                     }
                                 }
                             }
@@ -700,7 +700,7 @@ namespace HiperTrip.Services
                     {
                         emailMessage.Subject = "Account Activation - HiperTrip";
 
-                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head> <title>{3}</title></head><body> <table style=""height: 100 %; width: 500px; font-family: sans-serif; ""> <tbody> <tr> <td> <div style=""background-color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""> <h1>Verification Notice!</h1> <h2>ACTION REQUIRED</h2> </div> <div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: justify; border-bottom: 1px #bbb solid;""> <span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div> <div style=""padding: 25px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Hi {1}:</p> <p style=""color: #ff6600; font-weight: bold;"">You're one step away from becoming a HiperTrip member.</p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80;"">Below is your account login information:</p> <p style=""color: #2e6c80;"">Username: <span style=""color: #ff6600; font-weight: bold;"">{0}</span></p> </div> <div style=""padding: 10px 0px 0px 0px;""> <p style=""color: #2e6c80; font-weight: bold;"">Here It's The Code To Activate Your Account: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p> </div> <div style=""color: #2e6c80; padding: 10px 0px 0px 0px;""> <p>If you have questions or concerns, please contact us at:</p> <p><a href=""https://www.w3schools.com"">http://www.hipertrip.com/contact/</a></p> </div> <div style=""color: #2e6c80; padding: 10px 0px 25px 0px;""> <p>-HiperTrip Team</p> </div> <div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div> </td> </tr> </tbody> </table></body></html>", usuario.CorreoUsuar, usuario.NombreCompl, codigoAct, emailMessage.Subject);
+                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head><title>{3}</title></head><body><table style=""height: 100 %; width: 500px; font-family: sans-serif; ""><tbody><tr><td><div style=""background-color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""><h1>Verification Notice!</h1><h2>ACTION REQUIRED</h2></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify; border-bottom: 1px #bbb solid;""><span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div><div style=""padding: 25px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c;"">Hi {1}:</p><p style=""font-size: 18px; color: #ff6600; font-weight: bold;"">You're one step away from becoming a HiperTrip member.</p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c;"">Below is your account login information:</p><p style=""font-size: 18px; color: #565a5c;"">Username: <span style=""color: #ff6600; font-weight: bold;"">{0}</span></p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c; font-weight: bold;"">Here It's The Code To Activate Your Account: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">If you have questions or concerns, please <a href=""https://www.hipertrip.com/contact/"" style=""color:#ff6600;text-decoration:none"" target=""_blank"">contact us</a>.</div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">-HiperTrip Team</div><div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 18px; color: #565a5c; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div></td></tr></tbody></table></body></html>", usuario.CorreoUsuar, usuario.NombreCompl, codigoAct, emailMessage.Subject);
 
                         break;
                     }
@@ -709,7 +709,7 @@ namespace HiperTrip.Services
                     {
                         emailMessage.Subject = "Account Activation - HiperTrip";
 
-                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head><title>{0}</title></head><body><table style=""height: 100 %; width: 500px; font-family: sans-serif; ""><tbody><tr><td><div style=""background-color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""><h1>Verification Notice!</h1><h2>ACTION REQUIRED</h2></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: justify; border-bottom: 1px #bbb solid;""><span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div><div style=""padding: 25px 0px 0px 0px;""><p style=""color: #2e6c80;"">Hi {1}:</p><p style=""color: #ff6600; font-weight: bold;"">You need to activate your account to start being a hipertriper.</p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""color: #2e6c80; font-weight: bold;"">Here It's The Code To Activate Your Account: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p></div><div style=""color: #2e6c80; padding: 10px 0px 0px 0px;""><p>If you have questions or concerns, please contact us at:</p><p><a href=""https://www.w3schools.com"">http://www.hipertrip.com/contact/</a></p></div><div style=""color: #2e6c80; padding: 10px 0px 25px 0px;""><p>-HiperTrip Team</p></div><div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 14px; color: #2e6c80; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div></td></tr></tbody></table></body></html>", emailMessage.Subject, usuario.NombreCompl, codigoAct);
+                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head><title>{0}</title></head><body><table style=""height: 100 %; width: 500px; font-family: sans-serif; ""><tbody><tr><td><div style=""background-color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""><h1>Verification Notice!</h1><h2>ACTION REQUIRED</h2></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify; border-bottom: 1px #bbb solid;""><span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div><div style=""padding: 25px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c;"">Hi {1}:</p><p style=""font-size: 18px; color: #ff6600; font-weight: bold;"">You need to activate your account to start being a hipertriper.</p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c; font-weight: bold;"">Here It's The Code To Activate Your Account: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">If you have questions or concerns, please <a href=""https://www.hipertrip.com/contact/"" style=""color:#ff6600;text-decoration:none"" target=""_blank"">contact us</a>.</div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">-HiperTrip Team</div><div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 18px; color: #565a5c; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div></td></tr></tbody></table></body></html>", emailMessage.Subject, usuario.NombreCompl, codigoAct);
 
                         break;
                     }
@@ -718,7 +718,7 @@ namespace HiperTrip.Services
                     {
                         emailMessage.Subject = "Password Recovery - HiperTrip";
 
-                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head><title>{0}</title></head><body><table style=""height: 100 %; width: 500px; font-family: sans-serif; ""><tbody><tr><td><div style=""background-color: #009bd4; color: #000000; text-align: center; padding-top: 1px; padding-bottom: 1px;""><h1>Verification Notice!</h1><h2>ACTION REQUIRED</h2></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify; border-bottom: 1px #bbb solid;""><span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div><div style=""padding: 25px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c;"">Hi {1}:</p><p style=""font-size: 18px; color: #ff6600; font-weight: bold;"">We got a request to reset your HiperTrip password.</p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c; font-weight: bold;"">Here It's The Code To Recover Your Password: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">If you ignore this message, your password will not be changed. If you didn't request a password reset, <a href=""https://www.hipertrip.com/contact/"" style=""color:#3b5998;text-decoration:none"" target=""_blank"">let us know</a>.</div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">-HiperTrip Team</div><div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 18px; color: #565a5c; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div></td></tr></tbody></table></body></html>", emailMessage.Subject, usuario.NombreCompl, codigoAct);
+                        emailMessage.Content = string.Format(new CultureInfo("es-Cr"), @"<!DOCTYPE html><html><head><title>{0}</title></head><body><table style=""height: 100 %; width: 500px; font-family: sans-serif; ""><tbody><tr><td><div style=""background-color: #009bd4; color: #ffffff; text-align: center; padding-top: 1px; padding-bottom: 1px;""><h1>Verification Notice!</h1><h2>ACTION REQUIRED</h2></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify; border-bottom: 1px #bbb solid;""><span style=""font-weight: bold;"">Notice:</span> To ensure you receive our future emails such as maintenance notices and renewal notices, please add us to your contact list.</div><div style=""padding: 25px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c;"">Hi {1}:</p><p style=""font-size: 18px; color: #ff6600; font-weight: bold;"">We got a request to reset your HiperTrip password.</p></div><div style=""padding: 10px 0px 0px 0px;""><p style=""font-size: 18px; color: #565a5c; font-weight: bold;"">Here It's The Code To Recover Your Password: <span style=""color: #ff6600; font-weight: bold;""> {2} </span></p></div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">If you ignore this message, your password will not be changed. If you didn't request a password reset, <a href=""https://www.hipertrip.com/contact/"" style=""color:#ff6600;text-decoration:none"" target=""_blank"">let us know</a>.</div><div style=""padding: 20px 0px 10px 0px; line-height: 180%; font-size: 18px; color: #565a5c; text-align: justify;"">-HiperTrip Team</div><div style=""padding: 0px 0 5px 0; line-height: 180%; font-size: 18px; color: #565a5c; text-align: center; border-bottom: 1px #bbb solid; border-top: 1px #bbb solid; font-weight: bold;""> DO NOT REPLY TO THIS EMAIL </div></td></tr></tbody></table></body></html>", emailMessage.Subject, usuario.NombreCompl, codigoAct);
 
                         break;
                     }

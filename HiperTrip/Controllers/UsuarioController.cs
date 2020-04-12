@@ -63,9 +63,9 @@ namespace HiperTrip.Controllers
         [AllowAnonymous]
         [HttpPost]
         [Route("ChangePassword")]
-        public async Task<IActionResult> CambiarContrasena(UsuarioDto usuario)
+        public async Task<IActionResult> CambiarContrasena(RecuperaContrasenaDto recuperaContrasena)
         {
-            return new ObjectResult(await _usuarioService.RecuperarCuenta(usuario).ConfigureAwait(true));
+            return new ObjectResult(await _usuarioService.CambiarContrasena(recuperaContrasena).ConfigureAwait(true));
         }
 
         // GET: api/Usuario

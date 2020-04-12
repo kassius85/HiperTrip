@@ -81,13 +81,25 @@ namespace HiperTrip.Filters
                                 filterContext.Result = new InternalServerErrorObjectResult(objectResult.Value);
                                 break;
                             }
+
+                        case HttpStatusCode.Unauthorized:
+                            {
+                                filterContext.Result = new UnauthorizedObjectResult(objectResult.Value);
+                                break;
+                            }
+
+                        default:
+                            {
+                                filterContext.Result = new BadRequestObjectResult(objectResult.Value);
+                                break;
+                            }
                     }
 
                     valorResult.Remove("StatusCode");
                 }
                 else
                 {
-                    _resultService.AddValue(false, "No se encuentra el código de estado de respuesta");
+                    _resultService.AddValue(false, "No se encuentra el código de estado de respuesta.");
 
                     filterContext.Result = new BadRequestObjectResult(_resultService.GetProperties());
                 }

@@ -113,18 +113,22 @@ namespace HiperTrip
             }
 
             // Manejo de errores gloabal.
-            app.ConfigureCustomExceptionMiddleware();
+            app.UseCustomExceptionMiddleware();
 
             // global cors policy
             app.UseCors("AllowAllOriginsPolicy");
 
             app.UseRouting();
             app.UseHttpsRedirection();
+
+            // Estandarizar formato de respuesta que no pasa por el filtro ModifyResponseFilter.
+            app.UseCustomResponseMiddleware();
+
             app.UseAuthentication();
             app.UseAuthorization();
 
             // Validaciones de usuario según token.
-            app.ConfigureCustomAuthorizationMiddleware();
+            app.UseCustomAuthorizationMiddleware();
 
             app.UseEndpoints(endpoints =>
             {

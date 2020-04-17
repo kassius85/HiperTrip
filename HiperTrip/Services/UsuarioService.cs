@@ -313,6 +313,13 @@ namespace HiperTrip.Services
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 2);
 
+                            ActivaCuentaDto activaCuenta = new ActivaCuentaDto()
+                            {
+                                CodUsuario = usuario.CodUsuario
+                            };
+
+                            _resultService.AddValue("ActivaCuentaDto", activaCuenta);
+
                             httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                             resultado = false;
                             mensaje = "Debe activar la cuenta antes de entrar a la aplicación. Revise su correo para obtener código.";
@@ -361,6 +368,7 @@ namespace HiperTrip.Services
             httpStatusCode = HttpStatusCode.BadRequest;
             resultado = false;
             mensaje = string.Empty;
+            RecuperaContrasenaDto recuperaContrasena = default;
 
             if (!usuarioDto.IsNull())
             {
@@ -388,6 +396,11 @@ namespace HiperTrip.Services
                             {
                                 EnviarCorreo(usuario, randomCode, 3);
 
+                                recuperaContrasena = new RecuperaContrasenaDto()
+                                {
+                                    CodUsuario = usuario.CodUsuario
+                                };
+
                                 httpStatusCode = HttpStatusCode.OK;
                                 resultado = true;
                                 mensaje = "Código de recuparación enviado. Favor revise su correo.";
@@ -413,6 +426,13 @@ namespace HiperTrip.Services
                             {
                                 // Enviar correo para activar cuenta.
                                 EnviarCorreo(usuario, randomCode, 2);
+
+                                ActivaCuentaDto activaCuenta = new ActivaCuentaDto()
+                                {
+                                    CodUsuario = usuario.CodUsuario
+                                };
+
+                                _resultService.AddValue("ActivaCuentaDto", activaCuenta);
 
                                 httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                                 mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener código.";
@@ -441,6 +461,11 @@ namespace HiperTrip.Services
 
             _resultService.AddValue("StatusCode", httpStatusCode);
             _resultService.AddValue(resultado, mensaje);
+
+            if (resultado)
+            {
+                _resultService.AddValue("RecuperaContrasenaDto", recuperaContrasena);
+            }
 
             return _resultService.GetProperties();
         }
@@ -543,6 +568,13 @@ namespace HiperTrip.Services
                                 {
                                     // Enviar correo para activar cuenta.
                                     EnviarCorreo(usuario, randomCode, 2);
+
+                                    ActivaCuentaDto activaCuenta = new ActivaCuentaDto()
+                                    {
+                                        CodUsuario = usuario.CodUsuario
+                                    };
+
+                                    _resultService.AddValue("ActivaCuentaDto", activaCuenta);
 
                                     httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
                                     mensaje = "Debe activar la cuenta antes de cambiar la contraseña. Revise su correo para obtener código.";

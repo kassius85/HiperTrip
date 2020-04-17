@@ -361,6 +361,7 @@ namespace HiperTrip.Services
             httpStatusCode = HttpStatusCode.BadRequest;
             resultado = false;
             mensaje = string.Empty;
+            RecuperaContrasenaDto recuperaContrasena = default;
 
             if (!usuarioDto.IsNull())
             {
@@ -387,6 +388,11 @@ namespace HiperTrip.Services
                             if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
                             {
                                 EnviarCorreo(usuario, randomCode, 3);
+
+                                recuperaContrasena = new RecuperaContrasenaDto()
+                                {
+                                    CodUsuario = usuario.CodUsuario
+                                };
 
                                 httpStatusCode = HttpStatusCode.OK;
                                 resultado = true;
@@ -441,6 +447,11 @@ namespace HiperTrip.Services
 
             _resultService.AddValue("StatusCode", httpStatusCode);
             _resultService.AddValue(resultado, mensaje);
+
+            if (resultado)
+            {
+                _resultService.AddValue("RecuperaContrasenaDto", recuperaContrasena);
+            }
 
             return _resultService.GetProperties();
         }

@@ -11,5 +11,10 @@
         {
             return (value == "S");
         }
+
+        public static bool IsStringSuccess(this string value)
+        {
+            return (value.ToLower() == "success");
+        }
     }
 }

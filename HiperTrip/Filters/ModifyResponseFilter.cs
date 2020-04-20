@@ -1,4 +1,5 @@
-﻿using HiperTrip.Interfaces;
+﻿using Entities.Enums;
+using HiperTrip.Interfaces;
 using HiperTrip.ObjectResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -99,7 +100,7 @@ namespace HiperTrip.Filters
                 }
                 else
                 {
-                    _resultService.AddValue(false, "No se encuentra el código de estado de respuesta.");
+                    _resultService.AddValue(Resultado.Error, "No se encuentra el código de estado de respuesta.");
 
                     filterContext.Result = new BadRequestObjectResult(_resultService.GetProperties());
                 }

@@ -1,4 +1,5 @@
-﻿using HiperTrip.Extensions;
+﻿using Entities.Enums;
+using HiperTrip.Extensions;
 using HiperTrip.Interfaces;
 using Microsoft.AspNetCore.Http;
 using System.Net;
@@ -36,7 +37,7 @@ namespace HiperTrip.Middlewares
             if (context.Response.StatusCode == (int)HttpStatusCode.Unauthorized && context.Response.ContentType.IsNull())
             {
                 context.Response.ContentType = "application/json";
-                _resultService.AddValue(false, "Acceso al sistema no autorizado.");
+                _resultService.AddValue(Resultado.Error, "Acceso al sistema no autorizado.");
 
                 await context.Response.WriteAsync(_resultService.GetJsonProperties()).ConfigureAwait(true);
 

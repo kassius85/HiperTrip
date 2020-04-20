@@ -1,4 +1,5 @@
-﻿using Entities.Helpers;
+﻿using Entities.Enums;
+using Entities.Helpers;
 using HiperTrip.Extensions;
 using HiperTrip.Interfaces;
 using System.Collections.Generic;
@@ -27,11 +28,11 @@ namespace HiperTrip.Services
             _properties.Add(key, value);
         }
 
-        public void AddValue(bool resultado, string mensaje)
+        public void AddValue(Resultado resultado, string mensaje)
         {
             Respuesta respuesta = new Respuesta()
             {
-                Resultado = resultado,
+                Resultado = resultado.ToString(),
                 Mensaje = mensaje
             };
 
@@ -43,7 +44,7 @@ namespace HiperTrip.Services
             if (!_properties.ContainsKey("StatusCode"))
             {
                 AddValue("StatusCode", HttpStatusCode.OK);
-                AddValue(true, string.Empty);
+                AddValue(Resultado.Success, string.Empty);
             }
 
             return _properties;

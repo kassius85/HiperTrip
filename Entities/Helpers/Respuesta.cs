@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using Entities.Enums;
+using Newtonsoft.Json;
 
 namespace Entities.Helpers
 {
     public class Respuesta
     {
-        public bool Resultado { get; set; }
+        public string Resultado { get; set; }
         public string Mensaje { get; set; }
 
         public override string ToString()

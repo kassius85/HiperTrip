@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Entities.DTOs;
+using Entities.Enums;
 using Entities.Helpers;
 using Entities.Models;
 using HiperTrip.Extensions;
@@ -31,7 +32,7 @@ namespace HiperTrip.Services
         private readonly ICambioRestringidoService _cambioRestringidoService;
 
         private HttpStatusCode httpStatusCode = default;
-        private bool resultado = false;
+        private Resultado resultado = Resultado.Success;
         private string mensaje = string.Empty;
 
         public UsuarioService(IOptions<AppSettings> appSettings,
@@ -68,7 +69,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> CrearUsuario(UsuarioDto usuarioNuevo)
         {
             httpStatusCode = HttpStatusCode.OK;
-            resultado = true;
+            resultado = Resultado.Success;
             mensaje = "";
             Usuario usuario = null;
 
@@ -113,8 +114,8 @@ namespace HiperTrip.Services
                         else
                         {
                             usuario = null;
-                            httpStatusCode = HttpStatusCode.BadRequest;
-                            resultado = false;
+                            httpStatusCode = HttpStatusCode.InternalServerError;
+                            resultado = Resultado.Error;
                             mensaje = "Inconsistencia al salvar usuario.";
                         }
                     }
@@ -122,7 +123,7 @@ namespace HiperTrip.Services
                     {
                         usuario = null;
                         httpStatusCode = HttpStatusCode.BadRequest;
-                        resultado = false;
+                        resultado = Resultado.Error;
                     }
                 }
             }
@@ -130,14 +131,14 @@ namespace HiperTrip.Services
             {
                 usuario = null;
                 httpStatusCode = HttpStatusCode.BadRequest;
-                resultado = false;
+                resultado = Resultado.Error;
                 mensaje = "Datos de usuario incorrectos.";
             }
 
             _resultService.AddValue("StatusCode", httpStatusCode);
             _resultService.AddValue(resultado, mensaje);
 
-            if (resultado)
+            if (resultado == Resultado.Success)
             {
                 usuarioNuevo = _mapper.Map<UsuarioDto>(usuario);
                 _resultService.AddValue("usuario", usuarioNuevo);
@@ -149,7 +150,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> ActivarCuenta(ActivaCuentaDto activarCuenta)
         {
             httpStatusCode = HttpStatusCode.BadRequest;
-            resultado = false;
+            resultado = Resultado.Error;
             mensaje = string.Empty;
 
             if (!activarCuenta.IsNull())
@@ -180,7 +181,7 @@ namespace HiperTrip.Services
                                 if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
                                 {
                                     httpStatusCode = HttpStatusCode.OK;
-                                    resultado = true;
+                                    resultado = Resultado.Success;
                                     mensaje = "Cuenta activada con éxito!";
                                 }
                                 else
@@ -230,6 +231,7 @@ namespace HiperTrip.Services
                         }
                         else
                         {
+                            resultado = Resultado.Warning;
                             mensaje = "La cuenta fue activada con anterioridad.";
                         }
                     }
@@ -259,7 +261,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> Autenticarse(UsuarioDto usuarioDto)
         {
             httpStatusCode = HttpStatusCode.OK;
-            resultado = true;
+            resultado = Resultado.Error;
             mensaje = "";
 
             Usuario usuario = null;
@@ -281,14 +283,13 @@ namespace HiperTrip.Services
                     else
                     {
                         httpStatusCode = HttpStatusCode.BadRequest;
-                        resultado = false;
                         mensaje = "Debe suministrar el correo o teléfono para la autenticación.";
                     }
                 }
             }
 
             // Verificar si se trajeron datos del usuario.
-            if (resultado && !usuario.IsNull())
+            if (!usuario.IsNull())
             {
                 string contrasena = usuarioDto.Contrasena ?? string.Empty;
                 
@@ -299,7 +300,9 @@ namespace HiperTrip.Services
                     usuarioDto = _mapper.Map<UsuarioDto>(usuario);
 
                     token = usuarioDto.CodUsuario.BuildToken(usuarioDto.CorreoUsuar, _appSettings.JwtSecretKey, _appSettings.JwtExpireMinutes);
-                
+
+                    resultado = Resultado.Success;
+
                     if (!usuarioDto.UsuarActivo.IsStringTrue())
                     {
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
@@ -307,7 +310,7 @@ namespace HiperTrip.Services
 
                         // Incicializar datos para la solicitud de activación de cuenta.
                         CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
-
+                        
                         if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
                         {
                             // Enviar correo para activar cuenta.
@@ -321,13 +324,12 @@ namespace HiperTrip.Services
                             _resultService.AddValue("ActivaCuentaDto", activaCuenta);
 
                             httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                            resultado = false;
-                            mensaje = "Debe activar la cuenta antes de entrar a la aplicación. Revise su correo para obtener código.";
+                            resultado = Resultado.Warning;
+                            mensaje = "Debe activar la cuenta antes de entrar a la aplicación. Revise su correo para obtener el código.";
                         }
                         else
                         {
                             httpStatusCode = HttpStatusCode.InternalServerError;
-                            resultado = false;
                             mensaje = "Inconsistencia salvando datos de activación de cuenta.";
                         }
                     }
@@ -335,18 +337,13 @@ namespace HiperTrip.Services
                 else
                 {
                     httpStatusCode = HttpStatusCode.BadRequest;
-                    resultado = false;
                     mensaje = "Usuario o contraseña incorrecto.";
                 }
             }
             else
             {
-                if (resultado)
-                {
-                    httpStatusCode = HttpStatusCode.NotFound;
-                    resultado = false;
-                    mensaje = "El usuario no existe.";
-                }
+                httpStatusCode = HttpStatusCode.NotFound;
+                mensaje = "Usuario o contraseña incorrecto.";
 
                 usuarioDto = null;
             }
@@ -354,7 +351,7 @@ namespace HiperTrip.Services
             _resultService.AddValue("StatusCode", httpStatusCode);
             _resultService.AddValue(resultado, mensaje);
 
-            if (resultado)
+            if (resultado == Resultado.Success)
             {
                 _resultService.AddValue("usuario", usuarioDto);
                 _resultService.AddValue("token", token);
@@ -366,7 +363,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> RecuperarCuenta(UsuarioDto usuarioDto)
         {
             httpStatusCode = HttpStatusCode.BadRequest;
-            resultado = false;
+            resultado = Resultado.Error;
             mensaje = string.Empty;
             RecuperaContrasenaDto recuperaContrasena = default;
 
@@ -402,7 +399,7 @@ namespace HiperTrip.Services
                                 };
 
                                 httpStatusCode = HttpStatusCode.OK;
-                                resultado = true;
+                                resultado = Resultado.Success;
                                 mensaje = "Código de recuparación enviado. Favor revise su correo.";
                             }
                             else
@@ -435,13 +432,14 @@ namespace HiperTrip.Services
                                 _resultService.AddValue("ActivaCuentaDto", activaCuenta);
 
                                 httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                                mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener código.";
+                                resultado = Resultado.Warning;
+                                mensaje = "Debe activar la cuenta antes de recuperar la contraseña. Revise su correo para obtener el código.";
                             }
                             else
                             {
                                 httpStatusCode = HttpStatusCode.InternalServerError;
                                 mensaje = "Inconsistencia al salvar datos de usuario.";
-                            }                            
+                            }
                         }
                     }
                     else
@@ -462,7 +460,7 @@ namespace HiperTrip.Services
             _resultService.AddValue("StatusCode", httpStatusCode);
             _resultService.AddValue(resultado, mensaje);
 
-            if (resultado)
+            if (resultado == Resultado.Success)
             {
                 _resultService.AddValue("RecuperaContrasenaDto", recuperaContrasena);
             }
@@ -473,7 +471,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> CambiarContrasena(RecuperaContrasenaDto recuperaContrasena)
         {
             httpStatusCode = HttpStatusCode.BadRequest;
-            resultado = false;
+            resultado = Resultado.Error;
             mensaje = string.Empty;
 
             if (!recuperaContrasena.IsNull())
@@ -510,7 +508,7 @@ namespace HiperTrip.Services
                                         if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
                                         {
                                             httpStatusCode = HttpStatusCode.OK;
-                                            resultado = true;
+                                            resultado = Resultado.Success;
                                             mensaje = "Cuenta recuperada con éxito!";
                                         }
                                         else
@@ -577,7 +575,8 @@ namespace HiperTrip.Services
                                     _resultService.AddValue("ActivaCuentaDto", activaCuenta);
 
                                     httpStatusCode = HttpStatusCode.PreconditionRequired; // 428 - alert
-                                    mensaje = "Debe activar la cuenta antes de cambiar la contraseña. Revise su correo para obtener código.";
+                                    resultado = Resultado.Warning;
+                                    mensaje = "Debe activar la cuenta antes de cambiar la contraseña. Revise su correo para obtener el código.";
                                 }
                                 else
                                 {
@@ -594,6 +593,7 @@ namespace HiperTrip.Services
                     }
                     else
                     {
+                        resultado = Resultado.Warning;
                         mensaje = "La contraseña fue recuperada con anterioridad. Si olvidó su nueva contraseña debe repetir el proceso de recuperación de contraseña desde el inicio.";
                     }                    
                 }
@@ -628,7 +628,7 @@ namespace HiperTrip.Services
         public async Task<Dictionary<string, object>> GetUsuarioPorId(string id)
         {
             httpStatusCode = HttpStatusCode.BadRequest;
-            resultado = false;
+            resultado = Resultado.Error;
             mensaje = string.Empty;
 
             if (!string.IsNullOrEmpty(id))
@@ -640,7 +640,7 @@ namespace HiperTrip.Services
                     UsuarioDto usuarioDto = _mapper.Map<UsuarioDto>(usuario);
 
                     httpStatusCode = HttpStatusCode.OK;
-                    resultado = true;
+                    resultado = Resultado.Success;
                     _resultService.AddValue("usuario", usuarioDto);
                 }
                 else
@@ -671,7 +671,7 @@ namespace HiperTrip.Services
         private async Task<bool> ValidaNuevo(UsuarioDto usuario)
         {
             httpStatusCode = HttpStatusCode.OK;
-            resultado = true;
+            resultado = Resultado.Success;
             mensaje = "";
 
             if (_emailService.ValidEmail(usuario.CorreoUsuar, @_emailConfiguration.RegExp))
@@ -683,14 +683,14 @@ namespace HiperTrip.Services
                 else
                 {
                     httpStatusCode = HttpStatusCode.BadRequest;
-                    resultado = false;
+                    resultado = Resultado.Error;
                     mensaje = "El correo ya está asociado a otra cuenta.";
                 }
             }
             else
             {
                 httpStatusCode = HttpStatusCode.BadRequest;
-                resultado = false;
+                resultado = Resultado.Error;
                 mensaje = "La dirección de correo no es válida.";
             }
 

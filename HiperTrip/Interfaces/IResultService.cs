@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Entities.Enums;
+using System.Collections.Generic;
 
 namespace HiperTrip.Interfaces
 {
@@ -6,7 +7,7 @@ namespace HiperTrip.Interfaces
     {
         void AddValue(string key, object value);
 
-        void AddValue(bool resultadp, string mensaje);
+        void AddValue(Resultado resultado, string mensaje);
 
         Dictionary<string, object> GetProperties();
 

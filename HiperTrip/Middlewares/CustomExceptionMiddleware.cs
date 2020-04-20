@@ -1,4 +1,5 @@
-﻿using HiperTrip.Interfaces;
+﻿using Entities.Enums;
+using HiperTrip.Interfaces;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Net;
@@ -35,7 +36,7 @@ namespace HiperTrip.Middlewares
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
-            _resultService.AddValue(false, exception.Message + " " + exception.GetType());
+            _resultService.AddValue(Resultado.Error, exception.Message + " " + exception.GetType());
 
             return context.Response.WriteAsync(_resultService.GetJsonProperties());
         }

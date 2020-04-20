@@ -1,4 +1,5 @@
-﻿using HiperTrip.Extensions;
+﻿using Entities.Enums;
+using HiperTrip.Extensions;
 using HiperTrip.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,7 +51,7 @@ namespace HiperTrip.Middlewares
             {
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                _resultService.AddValue(false, "El usuario con el que intenta acceder no existe en el sistema.");
+                _resultService.AddValue(Resultado.Error, "El usuario con el que intenta acceder no existe en el sistema.");
 
                 await context.Response.WriteAsync(_resultService.GetJsonProperties()).ConfigureAwait(true);
 

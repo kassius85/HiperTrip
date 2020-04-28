@@ -45,6 +45,10 @@ namespace HiperTrip.Extensions
             });
         }
 
+        /// <summary>
+        /// Cinfigurar servicios
+        /// </summary>
+        /// <param name="services"></param>
         public static void ConfigureCustomServices(this IServiceCollection services)
         {
             services.AddTransient<IEmailService, EmailService>(); // Envío de correos.
@@ -52,6 +56,7 @@ namespace HiperTrip.Extensions
             services.AddScoped<IResultService, ResultService>();
             services.AddScoped<IParamGenUsuService, ParamGenUsuService>();
             services.AddScoped<ICambioRestringidoService, CambioRestringidoService>();
+            services.AddScoped<IContrasenaAntService, ContrasenaAntService>();
         }
 
         public static void ConfigureSettings(this IServiceCollection services, IConfiguration Configuration, out IConfigurationSection appSettingsSection)

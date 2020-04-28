@@ -18,6 +18,7 @@ namespace Entities.Models
 
         public virtual TipoCambioCuenta CodTipCambCuentaNavigation { get; set; }
         public virtual Usuario CodUsuarioNavigation { get; set; }
+        public virtual ContrasenaAnt ContrasenaAnt { get; set; }
         public virtual ICollection<IntentoCambio> IntentoCambio { get; set; }
     }
 }

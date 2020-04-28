@@ -10,6 +10,7 @@ using HiperTrip.Settings;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Org.BouncyCastle.Math.EC.Rfc7748;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -30,6 +31,7 @@ namespace HiperTrip.Services
         private readonly IActionContextAccessor _accessor;
         private readonly IParamGenUsuService _paramGenUsuService;
         private readonly ICambioRestringidoService _cambioRestringidoService;
+        private readonly IContrasenaAntService _contrasenaAntService;
 
         private HttpStatusCode httpStatusCode = default;
         private Resultado resultado = Resultado.Success;
@@ -43,7 +45,8 @@ namespace HiperTrip.Services
                               IOptions<EmailSettings> emailConfiguration,
                               IActionContextAccessor accessor,
                               IParamGenUsuService paramGenUsuService,
-                              ICambioRestringidoService cambioRestringidoService)
+                              ICambioRestringidoService cambioRestringidoService,
+                              IContrasenaAntService contrasenaAntService)
         {
             if (appSettings.IsNull())
             {
@@ -64,6 +67,7 @@ namespace HiperTrip.Services
             _accessor = accessor;
             _paramGenUsuService = paramGenUsuService;
             _cambioRestringidoService = cambioRestringidoService;
+            _contrasenaAntService = contrasenaAntService;
         }
 
         public async Task<Dictionary<string, object>> CrearUsuario(UsuarioDto usuarioNuevo)
@@ -497,25 +501,33 @@ namespace HiperTrip.Services
                                 // Verificar el código de recuperación.
                                 if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                                 {
-                                    if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
+                                    // Verificar que la nueva contraseña no coincida con ninguna de las n anteriores.
+                                    if (await VerificaContrasenasAnt(usuario.CodUsuario, (int)paramGenUsu.CantContrAntValid, recuperaContrasena.Contrasena))
                                     {
-                                        // Inicializar la contraseña con Hash y el Salt.
-                                        usuario.ContrasHash = contrhash;
-                                        usuario.ContrasSalt = contrsalt;                                    
-
-                                        cambioRestringido.IntentoCambio.Add(intentoCambio);
-
-                                        if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                        if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
                                         {
-                                            httpStatusCode = HttpStatusCode.OK;
-                                            resultado = Resultado.Success;
-                                            mensaje = "Cuenta recuperada con éxito!";
+                                            // Inicializar la contraseña con Hash y el Salt.
+                                            usuario.ContrasHash = contrhash;
+                                            usuario.ContrasSalt = contrsalt;
+
+                                            cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+                                            if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                            {
+                                                httpStatusCode = HttpStatusCode.OK;
+                                                resultado = Resultado.Success;
+                                                mensaje = "Cuenta recuperada con éxito!";
+                                            }
+                                            else
+                                            {
+                                                httpStatusCode = HttpStatusCode.InternalServerError;
+                                                mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
+                                            }
                                         }
-                                        else
-                                        {
-                                            httpStatusCode = HttpStatusCode.InternalServerError;
-                                            mensaje = "Inconsistencia actualizando datos de recuperación de contraseña.";
-                                        }
+                                    }
+                                    else
+                                    {
+                                        mensaje = string.Format("La nueva contraseña debe ser diferente a las últimas {0} contraseñas anteriores.", (int)paramGenUsu.CantContrAntValid);
                                     }
                                 }
                                 else
@@ -799,6 +811,21 @@ namespace HiperTrip.Services
             };
 
             return intentoCambio;
+        }
+
+        private async Task<bool> VerificaContrasenasAnt(string codUsuario, int cantContrAnt, string contrasena)
+        {
+            IList<ContrasenaAnt> listaContrasenaAnt = await _contrasenaAntService.GetUltimasContrasenas(codUsuario, cantContrAnt);
+
+            foreach (ContrasenaAnt contrasenaAnt in listaContrasenaAnt)
+            {
+                if (contrasena.VerifyHashCode(contrasenaAnt.ContrasSalt, contrasenaAnt.ContrasHash))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

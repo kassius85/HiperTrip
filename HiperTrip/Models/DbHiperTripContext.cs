@@ -25,6 +25,7 @@ namespace HiperTrip.Models
         public virtual DbSet<ParamGenUsu> ParamGenUsu { get; set; }
         public virtual DbSet<TipoCambioCuenta> TipoCambioCuenta { get; set; }
         public virtual DbSet<Usuario> Usuario { get; set; }
+        public virtual DbSet<ContrasenaAnt> ContrasenaAnt { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -174,6 +175,8 @@ namespace HiperTrip.Models
 
                 entity.Property(e => e.CantIntentRecu).HasColumnType("numeric(2, 0)");
 
+                entity.Property(e => e.CantContrAntValid).HasColumnType("numeric(2, 0)");
+
                 entity.Property(e => e.CodActiCuenta)
                     .IsRequired()
                     .HasMaxLength(2)
@@ -273,6 +276,35 @@ namespace HiperTrip.Models
                     .HasMaxLength(1)
                     .IsUnicode(false)
                     .HasDefaultValueSql("('N')");
+            });
+
+            modelBuilder.Entity<ContrasenaAnt>(entity =>
+            {
+                entity.HasKey(e => new { e.CodUsuario, e.FechaSolic });
+
+                entity.Property(e => e.CodUsuario)
+                    .HasMaxLength(15)
+                    .IsUnicode(false)
+                    .HasDefaultValueSql("('')");
+
+                entity.Property(e => e.FechaSolic)
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+
+                entity.Property(e => e.ContrasHash)
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasDefaultValueSql("(0x00)");
+
+                entity.Property(e => e.ContrasSalt)
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasDefaultValueSql("(0x00)");
+
+                entity.HasOne(d => d.CambioRestringido)
+                    .WithOne(p => p.ContrasenaAnt)
+                    .HasForeignKey<ContrasenaAnt>(d => new { d.CodUsuario, d.FechaSolic })
+                    .HasConstraintName("FK_ContrasenaAnt_CambioRestringido");
             });
 
             OnModelCreatingPartial(modelBuilder);

@@ -25,5 +25,12 @@ namespace HiperTrip.Services
                                    .Take(cantContrAnt)
                                    .ToListAsync();
         }
+
+        public async Task<bool> InsertaNuevaContrasenaAnt(ContrasenaAnt contrasenaAnt)
+        {
+            await _dbContext.ContrasenaAnt.AddAsync(contrasenaAnt);
+
+            return (await _dbContext.SaveChangesAsync() > 0);
+        }
     }
 }

@@ -10,6 +10,7 @@ using HiperTrip.Settings;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using MimeKit.Encodings;
 using Org.BouncyCastle.Math.EC.Rfc7748;
 using System;
 using System.Collections.Generic;
@@ -501,8 +502,10 @@ namespace HiperTrip.Services
                                 // Verificar el código de recuperación.
                                 if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                                 {
+                                    IList<ContrasenaAnt> listaContrasenaAnt = await _contrasenaAntService.GetUltimasContrasenas(usuario.CodUsuario, (int)paramGenUsu.CantContrAntValid - 1);
+
                                     // Verificar que la nueva contraseña no coincida con ninguna de las n anteriores.
-                                    if (await VerificaContrasenasAnt(usuario.CodUsuario, (int)paramGenUsu.CantContrAntValid, recuperaContrasena.Contrasena))
+                                    if (VerificaContrasenasAnt(usuario, recuperaContrasena.Contrasena, listaContrasenaAnt, out ContrasenaAnt contrasenaAnt))
                                     {
                                         if (recuperaContrasena.Contrasena.BuildHashString(out byte[] contrhash, out byte[] contrsalt, out mensaje))
                                         {
@@ -511,6 +514,7 @@ namespace HiperTrip.Services
                                             usuario.ContrasSalt = contrsalt;
 
                                             cambioRestringido.IntentoCambio.Add(intentoCambio);
+                                            cambioRestringido.ContrasenaAnt = contrasenaAnt;
 
                                             if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
                                             {
@@ -813,13 +817,23 @@ namespace HiperTrip.Services
             return intentoCambio;
         }
 
-        private async Task<bool> VerificaContrasenasAnt(string codUsuario, int cantContrAnt, string contrasena)
+        private bool VerificaContrasenasAnt(Usuario usuario, string contrasena, IList<ContrasenaAnt> listaContrasenaAnt, out ContrasenaAnt contrasenaAnt)
         {
-            IList<ContrasenaAnt> listaContrasenaAnt = await _contrasenaAntService.GetUltimasContrasenas(codUsuario, cantContrAnt);
-
-            foreach (ContrasenaAnt contrasenaAnt in listaContrasenaAnt)
+            contrasenaAnt = new ContrasenaAnt()
             {
-                if (contrasena.VerifyHashCode(contrasenaAnt.ContrasSalt, contrasenaAnt.ContrasHash))
+                CodUsuario = usuario.CodUsuario,
+                FechaSolic = usuario.CambioRestringido
+                                    .Select(x => x.FechaSolic)
+                                    .FirstOrDefault(),
+                ContrasSalt = usuario.ContrasSalt,
+                ContrasHash = usuario.ContrasHash
+            };
+
+            listaContrasenaAnt.Add(contrasenaAnt);
+
+            foreach (ContrasenaAnt contrAnt in listaContrasenaAnt)
+            {
+                if (contrasena.VerifyHashCode(contrAnt.ContrasSalt, contrAnt.ContrasHash))
                 {
                     return false;
                 }

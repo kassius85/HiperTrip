@@ -76,9 +76,6 @@ namespace HiperTrip.Services
             mensaje = "";
             Usuario usuario = null;
 
-            int X = 0;
-            int y = 1 / X;
-
             if (!usuarioNuevo.IsNull())
             {
                 if (await ValidaNuevo(usuarioNuevo).ConfigureAwait(true))

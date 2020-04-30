@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace HiperTrip.Extensions
+﻿namespace HiperTrip.Extensions
 {
     public static class ObjectExtension
     {

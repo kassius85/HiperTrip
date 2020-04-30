@@ -10,8 +10,6 @@ using HiperTrip.Settings;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MimeKit.Encodings;
-using Org.BouncyCastle.Math.EC.Rfc7748;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -77,6 +75,9 @@ namespace HiperTrip.Services
             resultado = Resultado.Success;
             mensaje = "";
             Usuario usuario = null;
+
+            int X = 0;
+            int y = 1 / X;
 
             if (!usuarioNuevo.IsNull())
             {
@@ -179,7 +180,7 @@ namespace HiperTrip.Services
                             // Verificar el código de activación.
                             if (activarCuenta.CodActivacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                             {
-                                usuario.UsuarActivo = "S";                                
+                                usuario.UsuarActivo = "S";
 
                                 cambioRestringido.IntentoCambio.Add(intentoCambio);
 
@@ -231,7 +232,7 @@ namespace HiperTrip.Services
                                 {
                                     httpStatusCode = HttpStatusCode.InternalServerError;
                                     mensaje = "Inconsistencia actualizando datos de activación de cuenta.";
-                                }                                
+                                }
                             }
                         }
                         else
@@ -297,7 +298,7 @@ namespace HiperTrip.Services
             if (!usuario.IsNull())
             {
                 string contrasena = usuarioDto.Contrasena ?? string.Empty;
-                
+
                 // Verificar que la contraseña es válida.
                 if (contrasena.VerifyHashCode(usuario.ContrasSalt, usuario.ContrasHash))
                 {
@@ -315,7 +316,7 @@ namespace HiperTrip.Services
 
                         // Incicializar datos para la solicitud de activación de cuenta.
                         CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
-                        
+
                         if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
                         {
                             // Enviar correo para activar cuenta.
@@ -611,7 +612,7 @@ namespace HiperTrip.Services
                     {
                         resultado = Resultado.Warning;
                         mensaje = "La contraseña fue recuperada con anterioridad. Si olvidó su nueva contraseña debe repetir el proceso de recuperación de contraseña desde el inicio.";
-                    }                    
+                    }
                 }
                 else
                 {

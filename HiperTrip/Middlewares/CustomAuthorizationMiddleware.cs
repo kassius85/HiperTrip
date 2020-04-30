@@ -2,7 +2,6 @@
 using HiperTrip.Extensions;
 using HiperTrip.Interfaces;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -66,7 +65,7 @@ namespace HiperTrip.Middlewares
         private async Task<bool> ValidaTokenJti(HttpContext context)
         {
             string jti = context.GetTokenClaim("jti");
-            
+
             if (!string.IsNullOrEmpty(jti))
             {
                 //IUsuarioService userService = context.RequestServices.GetRequiredService<IUsuarioService>();

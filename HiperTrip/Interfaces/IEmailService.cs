@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using Entities.Helpers;
+﻿using Entities.Helpers;
 using HiperTrip.Settings;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HiperTrip.Interfaces
 {

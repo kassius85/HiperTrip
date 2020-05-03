@@ -1,6 +1,6 @@
 ﻿using Entities.Enums;
-using HiperTrip.Extensions;
-using HiperTrip.Interfaces;
+using Helpers.Extensions;
+using Interfaces.Contracts;
 using Microsoft.AspNetCore.Http;
 using System.Net;
 using System.Threading.Tasks;

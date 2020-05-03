@@ -1,5 +1,5 @@
 ﻿using Entities.Enums;
-using HiperTrip.Interfaces;
+using Interfaces.Contracts;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Net;

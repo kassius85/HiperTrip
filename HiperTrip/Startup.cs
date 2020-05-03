@@ -1,7 +1,6 @@
-using AutoMapper;
+using Entities;
 using HiperTrip.Extensions;
 using HiperTrip.Filters;
-using HiperTrip.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -76,9 +75,6 @@ namespace HiperTrip
                 options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
                 options.HttpsPort = 443;
             });
-
-            // Configurar AutoMapper
-            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
             // Configurar Settings.
             services.ConfigureSettings(Configuration, out IConfigurationSection appSettingsSection);

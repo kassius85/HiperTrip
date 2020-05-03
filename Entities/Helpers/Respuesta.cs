@@ -1,5 +1,4 @@
-﻿using Entities.Enums;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace Entities.Helpers
 {

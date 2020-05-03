@@ -1,6 +1,6 @@
 ﻿using Entities.DTOs;
 using Entities.Models;
-using HiperTrip.Interfaces;
+using Interfaces.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;

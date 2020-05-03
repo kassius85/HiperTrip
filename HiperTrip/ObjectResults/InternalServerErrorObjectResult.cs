@@ -13,7 +13,7 @@ namespace HiperTrip.ObjectResults
         /// <param name="value"></param>
         public InternalServerErrorObjectResult(object value) : base(value)
         {
-            StatusCode = (int)HttpStatusCode.PreconditionRequired;
+            StatusCode = (int)HttpStatusCode.InternalServerError;
         }
     }
 }

@@ -1,6 +1,6 @@
 ﻿using Entities.Enums;
-using HiperTrip.Interfaces;
 using HiperTrip.ObjectResults;
+using Interfaces.Contracts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.Collections.Generic;

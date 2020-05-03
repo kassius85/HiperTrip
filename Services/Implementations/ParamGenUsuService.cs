@@ -8,16 +8,16 @@ namespace Services.Implementations
 {
     public class ParamGenUsuService : IParamGenUsuService
     {
-        private readonly DbHiperTripContext _dbContext;
+        //private readonly DbHiperTripContext _dbContext;
 
-        public ParamGenUsuService(DbHiperTripContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
+        //public ParamGenUsuService(DbHiperTripContext dbContext)
+        //{
+        //    _dbContext = dbContext;
+        //}
 
-        public async Task<ParamGenUsu> GetParamGenUsu()
-        {
-            return await _dbContext.ParamGenUsu.SingleOrDefaultAsync().ConfigureAwait(true);
-        }
+        //public async Task<ParamGenUsu> GetParamGenUsu()
+        //{
+        //    return await _dbContext.ParamGenUsu.SingleOrDefaultAsync().ConfigureAwait(true);
+        //}
     }
 }

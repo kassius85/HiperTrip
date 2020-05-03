@@ -1,13 +1,12 @@
-﻿using Entities;
-using Entities.DTOs;
+﻿using Entities.DTOs;
 using Entities.Enums;
 using Entities.Helpers;
 using Entities.Models;
 using Entities.Settings;
 using Helpers.Extensions;
 using Interfaces.Contracts;
+using Interfaces.Repositories;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -21,28 +20,22 @@ namespace Services.Implementations
     public class UsuarioService : IUsuarioService
     {
         private readonly AppSettings _appSettings;
-        private readonly DbHiperTripContext _dbContext;
+        private readonly IRepositoryWrapper _repoWrapper;
         private readonly IEmailService _emailService;
         private readonly IResultService _resultService;
         private readonly EmailSettings _emailConfiguration;
         private readonly IActionContextAccessor _accessor;
-        private readonly IParamGenUsuService _paramGenUsuService;
-        private readonly ICambioRestringidoService _cambioRestringidoService;
-        private readonly IContrasenaAntService _contrasenaAntService;
 
         private HttpStatusCode httpStatusCode = default;
         private Resultado resultado = Resultado.Success;
         private string mensaje = string.Empty;
 
         public UsuarioService(IOptions<AppSettings> appSettings,
-                              DbHiperTripContext dbContext,
+                              IRepositoryWrapper repoWrapper,
                               IEmailService emailService,
                               IResultService resultService,
                               IOptions<EmailSettings> emailConfiguration,
-                              IActionContextAccessor accessor,
-                              IParamGenUsuService paramGenUsuService,
-                              ICambioRestringidoService cambioRestringidoService,
-                              IContrasenaAntService contrasenaAntService)
+                              IActionContextAccessor accessor)
         {
             if (appSettings.IsNull())
             {
@@ -50,7 +43,7 @@ namespace Services.Implementations
             }
 
             _appSettings = appSettings.Value;
-            _dbContext = dbContext;
+            _repoWrapper = repoWrapper;
             _emailService = emailService;
             _resultService = resultService;
 
@@ -60,9 +53,6 @@ namespace Services.Implementations
             }
 
             _accessor = accessor;
-            _paramGenUsuService = paramGenUsuService;
-            _cambioRestringidoService = cambioRestringidoService;
-            _contrasenaAntService = contrasenaAntService;
         }
 
         public async Task<Dictionary<string, object>> CrearUsuario(UsuarioDto usuarioNuevo)
@@ -89,21 +79,22 @@ namespace Services.Implementations
                         usuario.ContrasSalt = contrsalt;
 
                         // Generar nuevo código de opción.
-                        string maxcod = await _dbContext.Usuario.MaxAsync(x => x.CodUsuario).ConfigureAwait(true) ?? "0";
-                        string newcod = (int.Parse(maxcod, CultureInfo.InvariantCulture) + 1).ToString(CultureInfo.InvariantCulture).Trim().PadLeft(15, '0');
+                        string maxcod = await _repoWrapper.Usuario.MaxIdAsync();
+
+                        string newcod = (int.Parse(maxcod, CultureInfo.InvariantCulture) + 1).ToString().Trim().PadLeft(15, '0');
 
                         usuario.CodUsuario = newcod;
 
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+                        ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
                         // Incicializar datos para la solicitud de activación de cuenta.
                         CambioRestringido cambioRestringido = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
                         // Salvar datos de usuario.
-                        await _dbContext.Usuario.AddAsync(usuario);
+                        _repoWrapper.Usuario.Create(usuario);
 
-                        if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
+                        if (await _repoWrapper.SaveAsync() > 0)
                         {
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 1);
@@ -155,9 +146,9 @@ namespace Services.Implementations
             if (!activarCuenta.IsNull())
             {
                 // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+                ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
-                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoCambioCuenta(activarCuenta.CodUsuario, paramGenUsu.CodActiCuenta);
+                CambioRestringido cambioRestringido = await _repoWrapper.CambioRestringido.GetUltimoCambioCuentaAsync(activarCuenta.CodUsuario, paramGenUsu.CodActiCuenta);
 
                 if (!cambioRestringido.IsNull())
                 {
@@ -177,7 +168,10 @@ namespace Services.Implementations
 
                                 cambioRestringido.IntentoCambio.Add(intentoCambio);
 
-                                if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                _repoWrapper.IntentoCambio.Create(intentoCambio);
+                                _repoWrapper.CambioRestringido.Update(cambioRestringido);
+
+                                if (await _repoWrapper.SaveAsync() > 0)
                                 {
                                     httpStatusCode = HttpStatusCode.OK;
                                     resultado = Resultado.Success;
@@ -196,7 +190,10 @@ namespace Services.Implementations
 
                                 cambioRestringido.IntentoCambio.Add(intentoCambio);
 
-                                if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                _repoWrapper.IntentoCambio.Create(intentoCambio);
+                                _repoWrapper.CambioRestringido.Update(cambioRestringido);
+
+                                if (await _repoWrapper.SaveAsync() > 0)
                                 {
                                     if (cantIntentos < paramGenUsu.CantIntentAct) // Otro intento fallido.
                                     {
@@ -207,7 +204,9 @@ namespace Services.Implementations
                                         // Incicializar datos para la solicitud de activación de cuenta.
                                         CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                                        if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                        _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
+
+                                        if (await _repoWrapper.SaveAsync() > 0)
                                         {
                                             // Enviar correo para activar cuenta.
                                             EnviarCorreo(usuario, randomCode, 2);
@@ -271,13 +270,13 @@ namespace Services.Implementations
                 // Verificar si existe el correo o número de celular
                 if (!string.IsNullOrEmpty(usuarioDto.CorreoUsuar))
                 {
-                    usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+                    usuario = await _repoWrapper.Usuario.FindByEmailAsync(usuarioDto.CorreoUsuar);
                 }
                 else
                 {
                     if (!string.IsNullOrEmpty(usuarioDto.NumCelular))
                     {
-                        usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.NumCelular == usuarioDto.NumCelular).ConfigureAwait(true);
+                        usuario = await _repoWrapper.Usuario.FindByCellAsync(usuarioDto.NumCelular);
                     }
                     else
                     {
@@ -305,12 +304,14 @@ namespace Services.Implementations
                     if (!usuarioDto.UsuarActivo.IsStringTrue())
                     {
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+                        ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
                         // Incicializar datos para la solicitud de activación de cuenta.
                         CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                        if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                        _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
+
+                        if (await _repoWrapper.SaveAsync() > 0)
                         {
                             // Enviar correo para activar cuenta.
                             EnviarCorreo(usuario, randomCode, 2);
@@ -370,12 +371,13 @@ namespace Services.Implementations
             {
                 if (_emailService.ValidEmail(usuarioDto.CorreoUsuar, _emailConfiguration.RegExp))
                 {
-                    Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+                    //Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CorreoUsuar.ToUpper() == usuarioDto.CorreoUsuar.ToUpper()).ConfigureAwait(true);
+                    Usuario usuario = await _repoWrapper.Usuario.FindByEmailAsync(usuarioDto.CorreoUsuar);
 
                     if (!usuario.IsNull())
                     {
                         // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                        ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+                        ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
                         if (usuario.UsuarActivo.IsStringTrue())
                         {
@@ -383,12 +385,12 @@ namespace Services.Implementations
                             CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
 
                             // Añadir nueva solicitud de cambio.
-                            await _dbContext.CambioRestringido.AddAsync(cambioRestringidoNuevo);
+                            _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
 
                             // Actualizar datos de usuario.
-                            _dbContext.Entry(usuario).State = EntityState.Modified;
+                            _repoWrapper.Usuario.Update(usuario);
 
-                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
+                            if (await _repoWrapper.SaveAsync() > 0)
                             {
                                 EnviarCorreo(usuario, randomCode, 3);
 
@@ -413,12 +415,12 @@ namespace Services.Implementations
                             CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
                             // Añadir nueva solicitud de cambio.
-                            await _dbContext.CambioRestringido.AddAsync(cambioRestringidoNuevo);
+                            _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
 
                             // Actualizar datos de usuario.
-                            _dbContext.Entry(usuario).State = EntityState.Modified;
+                            _repoWrapper.Usuario.Update(usuario);
 
-                            if (await _dbContext.SaveChangesAsync().ConfigureAwait(true) > 0)
+                            if (await _repoWrapper.SaveAsync() > 0)
                             {
                                 // Enviar correo para activar cuenta.
                                 EnviarCorreo(usuario, randomCode, 2);
@@ -476,9 +478,9 @@ namespace Services.Implementations
             if (!recuperaContrasena.IsNull())
             {
                 // Buscar en parámetros generales el código de tipo de cambio que corresponde a activación de cuenta.
-                ParamGenUsu paramGenUsu = await _paramGenUsuService.GetParamGenUsu().ConfigureAwait(true);
+                ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
-                CambioRestringido cambioRestringido = await _cambioRestringidoService.GetUltimoCambioCuenta(recuperaContrasena.CodUsuario, paramGenUsu.CodRecupCuenta);
+                CambioRestringido cambioRestringido = await _repoWrapper.CambioRestringido.GetUltimoCambioCuentaAsync(recuperaContrasena.CodUsuario, paramGenUsu.CodRecupCuenta);
 
                 if (!cambioRestringido.IsNull())
                 {
@@ -496,7 +498,7 @@ namespace Services.Implementations
                                 // Verificar el código de recuperación.
                                 if (recuperaContrasena.CodRecuperacion.VerifyHashCode(usuario.ContrasSalt, usuario.CambioRestringido.FirstOrDefault().CodActivHash))
                                 {
-                                    IList<ContrasenaAnt> listaContrasenaAnt = await _contrasenaAntService.GetUltimasContrasenas(usuario.CodUsuario, (int)paramGenUsu.CantContrAntValid - 1);
+                                    IList<ContrasenaAnt> listaContrasenaAnt = await _repoWrapper.ContrasenaAnt.GetUltimasContrasenas(usuario.CodUsuario, (int)paramGenUsu.CantContrAntValid - 1);
 
                                     // Verificar que la nueva contraseña no coincida con ninguna de las n anteriores.
                                     if (VerificaContrasenasAnt(usuario, recuperaContrasena.Contrasena, listaContrasenaAnt, out ContrasenaAnt contrasenaAnt))
@@ -510,7 +512,10 @@ namespace Services.Implementations
                                             cambioRestringido.IntentoCambio.Add(intentoCambio);
                                             cambioRestringido.ContrasenaAnt = contrasenaAnt;
 
-                                            if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                            _repoWrapper.IntentoCambio.Create(intentoCambio);
+                                            _repoWrapper.CambioRestringido.Update(cambioRestringido);
+
+                                            if (await _repoWrapper.SaveAsync() > 0)
                                             {
                                                 httpStatusCode = HttpStatusCode.OK;
                                                 resultado = Resultado.Success;
@@ -535,7 +540,10 @@ namespace Services.Implementations
 
                                     cambioRestringido.IntentoCambio.Add(intentoCambio);
 
-                                    if (await _cambioRestringidoService.ModificaUltimoActivaCuenta(cambioRestringido, intentoCambio))
+                                    _repoWrapper.IntentoCambio.Create(intentoCambio);
+                                    _repoWrapper.CambioRestringido.Update(cambioRestringido);
+
+                                    if (await _repoWrapper.SaveAsync() > 0)
                                     {
                                         if (cantIntentos < paramGenUsu.CantIntentRecu) // Otro intento fallido.
                                         {
@@ -546,7 +554,9 @@ namespace Services.Implementations
                                             // Incicializar datos para la solicitud de recuperación de contraseña.
                                             CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodRecupCuenta, out string randomCode);
 
-                                            if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                            _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
+
+                                            if (await _repoWrapper.SaveAsync() > 0)
                                             {
                                                 // Enviar correo para recuperar contraseña.
                                                 EnviarCorreo(usuario, randomCode, 3);
@@ -572,7 +582,9 @@ namespace Services.Implementations
                                 // Incicializar datos para la solicitud de activación de cuenta.
                                 CambioRestringido cambioRestringidoNuevo = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
-                                if (await _cambioRestringidoService.InsertaNuevoActivaCuenta(cambioRestringidoNuevo))
+                                _repoWrapper.CambioRestringido.Create(cambioRestringidoNuevo);
+
+                                if (await _repoWrapper.SaveAsync() > 0)
                                 {
                                     // Enviar correo para activar cuenta.
                                     EnviarCorreo(usuario, randomCode, 2);
@@ -626,7 +638,7 @@ namespace Services.Implementations
 
         public async Task<Dictionary<string, object>> GetUsuarios()
         {
-            IList<Usuario> resultado = await _dbContext.Usuario.ToListAsync().ConfigureAwait(true);
+            IList<Usuario> resultado = await _repoWrapper.Usuario.GetAllAsync();
 
             IList<UsuarioDto> listaUsuarios = resultado.Map<List<UsuarioDto>>();
 
@@ -643,7 +655,7 @@ namespace Services.Implementations
 
             if (!string.IsNullOrEmpty(id))
             {
-                Usuario usuario = await _dbContext.Usuario.SingleOrDefaultAsync(x => x.CodUsuario == id).ConfigureAwait(true);
+                Usuario usuario = await _repoWrapper.Usuario.GetAsync(id);
 
                 if (!usuario.IsNull())
                 {
@@ -672,7 +684,7 @@ namespace Services.Implementations
 
         public async Task<bool> ExisteUsuario(string id)
         {
-            return await _dbContext.Usuario.AnyAsync(e => e.CodUsuario == id).ConfigureAwait(true);
+            return await _repoWrapper.Usuario.ExistsUserAsync(id);
         }
 
         //-----------------------------------------------------------------------------------------------------------------------------------
@@ -709,7 +721,7 @@ namespace Services.Implementations
 
         private async Task<bool> ExisteCorreoUsuario(string correoUsu)
         {
-            return await _dbContext.Usuario.AnyAsync(e => e.CorreoUsuar == correoUsu).ConfigureAwait(true);
+            return await _repoWrapper.Usuario.ExistsUserEmailAsync(correoUsu);
         }
 
         private void EnviarCorreo(Usuario usuario, string codigoAct, int opcion = 1)

@@ -76,11 +76,15 @@ namespace HiperTrip
                 options.HttpsPort = 443;
             });
 
+
+            // Añadir configuración de repositorios.
+            services.ConfigureRepositoryWrapper();
+
             // Configurar Settings.
-            services.ConfigureSettings(Configuration, out IConfigurationSection appSettingsSection);
+            services.ConfigureSettings(Configuration);
 
             // Configurar autenticación JWT.
-            services.ConfigureJWTAuthentication(appSettingsSection);
+            services.ConfigureJWTAuthentication(Configuration);
 
             services.AddLogging(loggingBuilder =>
             {

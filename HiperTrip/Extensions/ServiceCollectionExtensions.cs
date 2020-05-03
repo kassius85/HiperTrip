@@ -1,5 +1,7 @@
-﻿using Entities.Settings;
+﻿using DataAccess.Repositories;
+using Entities.Settings;
 using Interfaces.Contracts;
+using Interfaces.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,9 +21,10 @@ namespace HiperTrip.Extensions
             //services.AddScoped<ValidationEntityExistsFilter<ClienteSistema>>();
         }
 
-        public static void ConfigureJWTAuthentication(this IServiceCollection services, IConfigurationSection appSettingsSection)
+        public static void ConfigureJWTAuthentication(this IServiceCollection services, IConfiguration Configuration)
         {
-            AppSettings appSettings = appSettingsSection.Get<AppSettings>();
+            AppSettings appSettings = Configuration.GetSection("AppSettings").Get<AppSettings>();
+            
             byte[] key = Encoding.ASCII.GetBytes(appSettings.JwtSecretKey);
 
             services.AddAuthentication(x =>
@@ -46,7 +49,16 @@ namespace HiperTrip.Extensions
         }
 
         /// <summary>
-        /// Cinfigurar servicios
+        /// Configurar repositorios.
+        /// </summary>
+        /// <param name="services"></param>
+        public static void ConfigureRepositoryWrapper(this IServiceCollection services)
+        {
+            services.AddScoped<IRepositoryWrapper, RepositoryWrapper>();
+        }
+
+        /// <summary>
+        /// Configurar servicios
         /// </summary>
         /// <param name="services"></param>
         public static void ConfigureCustomServices(this IServiceCollection services)
@@ -55,14 +67,12 @@ namespace HiperTrip.Extensions
             services.AddScoped<IUsuarioService, UsuarioService>();
             services.AddScoped<IResultService, ResultService>();
             services.AddScoped<IParamGenUsuService, ParamGenUsuService>();
-            services.AddScoped<ICambioRestringidoService, CambioRestringidoService>();
-            services.AddScoped<IContrasenaAntService, ContrasenaAntService>();
         }
 
-        public static void ConfigureSettings(this IServiceCollection services, IConfiguration Configuration, out IConfigurationSection appSettingsSection)
+        public static void ConfigureSettings(this IServiceCollection services, IConfiguration Configuration)
         {
             // Configurar objetos de configuración fuertemente tipados.
-            appSettingsSection = Configuration.GetSection("AppSettings");
+            IConfigurationSection appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
 
             //// Configuración para envío de correo

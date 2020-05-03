@@ -5,6 +5,6 @@ namespace Interfaces.Contracts
 {
     public interface IParamGenUsuService
     {
-        Task<ParamGenUsu> GetParamGenUsu();
+        //Task<ParamGenUsu> GetParamGenUsu();
     }
 }

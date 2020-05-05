@@ -80,7 +80,6 @@ namespace Services.Implementations
 
                         // Generar nuevo código de opción.
                         string maxcod = await _repoWrapper.Usuario.MaxIdAsync();
-
                         string newcod = (int.Parse(maxcod, CultureInfo.InvariantCulture) + 1).ToString().Trim().PadLeft(15, '0');
 
                         usuario.CodUsuario = newcod;
@@ -89,7 +88,7 @@ namespace Services.Implementations
                         ParamGenUsu paramGenUsu = await _repoWrapper.ParamGenUsu.GetParamGenUsuAsync();
 
                         // Incicializar datos para la solicitud de activación de cuenta.
-                        CambioRestringido cambioRestringido = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
+                        _ = CreaCambioRestringido(usuario, paramGenUsu.CodActiCuenta, out string randomCode);
 
                         // Salvar datos de usuario.
                         _repoWrapper.Usuario.Create(usuario);
@@ -166,12 +165,7 @@ namespace Services.Implementations
                             {
                                 usuario.UsuarActivo = "S";
 
-                                cambioRestringido.IntentoCambio.Add(intentoCambio);
-
-                                _repoWrapper.IntentoCambio.Create(intentoCambio);
-                                _repoWrapper.CambioRestringido.Update(cambioRestringido);
-
-                                if (await _repoWrapper.SaveAsync() > 0)
+                                if (await InsertarIntentoCambio(cambioRestringido, intentoCambio))
                                 {
                                     httpStatusCode = HttpStatusCode.OK;
                                     resultado = Resultado.Success;
@@ -188,12 +182,7 @@ namespace Services.Implementations
                                 intentoCambio.IntenExitoso = "N";
                                 int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
 
-                                cambioRestringido.IntentoCambio.Add(intentoCambio);
-
-                                _repoWrapper.IntentoCambio.Create(intentoCambio);
-                                _repoWrapper.CambioRestringido.Update(cambioRestringido);
-
-                                if (await _repoWrapper.SaveAsync() > 0)
+                                if (await InsertarIntentoCambio(cambioRestringido, intentoCambio))
                                 {
                                     if (cantIntentos < paramGenUsu.CantIntentAct) // Otro intento fallido.
                                     {
@@ -332,6 +321,10 @@ namespace Services.Implementations
                             httpStatusCode = HttpStatusCode.InternalServerError;
                             mensaje = "Inconsistencia salvando datos de activación de cuenta.";
                         }
+                    }
+                    else
+                    {
+                        // Validar si existe cambio de contraseña pendiente y anularlo.
                     }
                 }
                 else
@@ -509,13 +502,9 @@ namespace Services.Implementations
                                             usuario.ContrasHash = contrhash;
                                             usuario.ContrasSalt = contrsalt;
 
-                                            cambioRestringido.IntentoCambio.Add(intentoCambio);
                                             cambioRestringido.ContrasenaAnt = contrasenaAnt;
 
-                                            _repoWrapper.IntentoCambio.Create(intentoCambio);
-                                            _repoWrapper.CambioRestringido.Update(cambioRestringido);
-
-                                            if (await _repoWrapper.SaveAsync() > 0)
+                                            if (await InsertarIntentoCambio(cambioRestringido, intentoCambio))
                                             {
                                                 httpStatusCode = HttpStatusCode.OK;
                                                 resultado = Resultado.Success;
@@ -538,12 +527,7 @@ namespace Services.Implementations
                                     intentoCambio.IntenExitoso = "N";
                                     int cantIntentos = cambioRestringido.IntentoCambio.Count + 1;
 
-                                    cambioRestringido.IntentoCambio.Add(intentoCambio);
-
-                                    _repoWrapper.IntentoCambio.Create(intentoCambio);
-                                    _repoWrapper.CambioRestringido.Update(cambioRestringido);
-
-                                    if (await _repoWrapper.SaveAsync() > 0)
+                                    if (await InsertarIntentoCambio(cambioRestringido, intentoCambio))
                                     {
                                         if (cantIntentos < paramGenUsu.CantIntentRecu) // Otro intento fallido.
                                         {
@@ -846,6 +830,16 @@ namespace Services.Implementations
             }
 
             return true;
+        }
+
+        private async Task<bool> InsertarIntentoCambio(CambioRestringido cambioRestringido, IntentoCambio intentoCambio)
+        {
+            cambioRestringido.IntentoCambio.Add(intentoCambio);
+
+            _repoWrapper.IntentoCambio.Create(intentoCambio);
+            _repoWrapper.CambioRestringido.Update(cambioRestringido);
+
+            return (await _repoWrapper.SaveAsync() > 0);
         }
     }
 }

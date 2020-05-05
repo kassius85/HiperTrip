@@ -49,10 +49,5 @@ namespace DataAccess.Repositories
         {
             DbSet.Remove(entity);
         }
-
-        public async Task<int> SaveAsync()
-        {
-            return await DbHiperTripContext.SaveChangesAsync();
-        }
     }
 }
